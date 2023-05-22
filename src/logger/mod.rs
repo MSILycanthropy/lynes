@@ -5,7 +5,7 @@ use crate::{
     NES,
 };
 
-const ILLEGAL_NOPS: [&'static str; 3] = ["DOP", "TOP", "NOP2"];
+const ILLEGAL_NOPS: [&'static str; 2] = ["DOP", "TOP"];
 
 pub fn log(nes: &NES) {
     println!(

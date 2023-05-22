@@ -55,7 +55,7 @@ pub(crate) const INSTRUCTIONS_TABLE: [Option<Instruction>; 256] = [
     None,
     instr!("CLC", AddrMode::Implied, 2, 1, clc),
     instr!("ORA", AddrMode::AbsoluteY, 4, 3, ora),
-    il_instr!("NOP2", AddrMode::Implied, 2, 1, nop),
+    il_instr!("NOP", AddrMode::Implied, 2, 1, nop),
     None,
     il_instr!("TOP", AddrMode::AbsoluteX, 4, 3, top),
     instr!("ORA", AddrMode::AbsoluteX, 4, 3, ora),
@@ -87,7 +87,7 @@ pub(crate) const INSTRUCTIONS_TABLE: [Option<Instruction>; 256] = [
     None,
     instr!("SEC", AddrMode::Implied, 2, 1, sec),
     instr!("AND", AddrMode::AbsoluteY, 4, 3, and),
-    il_instr!("NOP2", AddrMode::Implied, 2, 1, nop),
+    il_instr!("NOP", AddrMode::Implied, 2, 1, nop),
     None,
     il_instr!("TOP", AddrMode::AbsoluteX, 4, 3, top),
     instr!("AND", AddrMode::AbsoluteX, 4, 3, and),
@@ -119,7 +119,7 @@ pub(crate) const INSTRUCTIONS_TABLE: [Option<Instruction>; 256] = [
     None,
     instr!("CLI", AddrMode::Implied, 2, 1, cli),
     instr!("EOR", AddrMode::AbsoluteY, 4, 3, eor),
-    il_instr!("NOP2", AddrMode::Implied, 2, 1, nop),
+    il_instr!("NOP", AddrMode::Implied, 2, 1, nop),
     None,
     il_instr!("TOP", AddrMode::AbsoluteX, 4, 3, top),
     instr!("EOR", AddrMode::AbsoluteX, 4, 3, eor),
@@ -151,7 +151,7 @@ pub(crate) const INSTRUCTIONS_TABLE: [Option<Instruction>; 256] = [
     None,
     instr!("SEI", AddrMode::Implied, 2, 1, sei),
     instr!("ADC", AddrMode::AbsoluteY, 4, 3, adc),
-    il_instr!("NOP2", AddrMode::Implied, 2, 1, nop),
+    il_instr!("NOP", AddrMode::Implied, 2, 1, nop),
     None,
     il_instr!("TOP", AddrMode::AbsoluteX, 4, 3, top),
     instr!("ADC", AddrMode::AbsoluteX, 4, 3, adc),
@@ -160,11 +160,11 @@ pub(crate) const INSTRUCTIONS_TABLE: [Option<Instruction>; 256] = [
     il_instr!("DOP", AddrMode::Immediate, 2, 2, dop),
     instr!("STA", AddrMode::IndirectX, 6, 2, sta),
     il_instr!("DOP", AddrMode::Immediate, 2, 2, dop),
-    None,
+    il_instr!("SAX", AddrMode::IndirectX, 6, 2, sax),
     instr!("STY", AddrMode::ZeroPage, 3, 2, sty),
     instr!("STA", AddrMode::ZeroPage, 3, 2, sta),
     instr!("STX", AddrMode::ZeroPage, 3, 2, stx),
-    None,
+    il_instr!("SAX", AddrMode::ZeroPage, 3, 2, sax),
     instr!("DEY", AddrMode::Implied, 2, 1, dey),
     il_instr!("DOP", AddrMode::Immediate, 2, 2, dop),
     instr!("TXA", AddrMode::Implied, 2, 1, txa),
@@ -172,7 +172,7 @@ pub(crate) const INSTRUCTIONS_TABLE: [Option<Instruction>; 256] = [
     instr!("STY", AddrMode::Absolute, 4, 3, sty),
     instr!("STA", AddrMode::Absolute, 4, 3, sta),
     instr!("STX", AddrMode::Absolute, 4, 3, stx),
-    None,
+    il_instr!("SAX", AddrMode::Absolute, 4, 3, sax),
     instr!("BCC", AddrMode::Relative, 2, 2, bcc),
     instr!("STA", AddrMode::IndirectY, 6, 2, sta),
     None,
@@ -180,7 +180,7 @@ pub(crate) const INSTRUCTIONS_TABLE: [Option<Instruction>; 256] = [
     instr!("STY", AddrMode::ZeroPageX, 4, 2, sty),
     instr!("STA", AddrMode::ZeroPageX, 4, 2, sta),
     instr!("STX", AddrMode::ZeroPageY, 4, 2, stx),
-    None,
+    il_instr!("SAX", AddrMode::ZeroPageY, 4, 2, sax),
     instr!("TYA", AddrMode::Implied, 2, 1, tya),
     instr!("STA", AddrMode::AbsoluteY, 5, 3, sta),
     instr!("TXS", AddrMode::Implied, 2, 1, txs),
@@ -192,11 +192,11 @@ pub(crate) const INSTRUCTIONS_TABLE: [Option<Instruction>; 256] = [
     instr!("LDY", AddrMode::Immediate, 2, 2, ldy),
     instr!("LDA", AddrMode::IndirectX, 6, 2, lda),
     instr!("LDX", AddrMode::Immediate, 2, 2, ldx),
-    None,
+    il_instr!("LAX", AddrMode::IndirectX, 6, 2, lax),
     instr!("LDY", AddrMode::ZeroPage, 3, 2, ldy),
     instr!("LDA", AddrMode::ZeroPage, 3, 2, lda),
     instr!("LDX", AddrMode::ZeroPage, 3, 2, ldx),
-    None,
+    il_instr!("LAX", AddrMode::ZeroPage, 3, 2, lax),
     instr!("TAY", AddrMode::Implied, 2, 1, tay),
     instr!("LDA", AddrMode::Immediate, 2, 2, lda),
     instr!("TAX", AddrMode::Implied, 2, 1, tax),
@@ -204,15 +204,15 @@ pub(crate) const INSTRUCTIONS_TABLE: [Option<Instruction>; 256] = [
     instr!("LDY", AddrMode::Absolute, 4, 3, ldy),
     instr!("LDA", AddrMode::Absolute, 4, 3, lda),
     instr!("LDX", AddrMode::Absolute, 4, 3, ldx),
-    None,
+    il_instr!("LAX", AddrMode::Absolute, 4, 3, lax),
     instr!("BCS", AddrMode::Relative, 2, 2, bcs),
     instr!("LDA", AddrMode::IndirectY, 5, 2, lda),
     None,
-    None,
+    il_instr!("LAX", AddrMode::IndirectY, 5, 2, lax),
     instr!("LDY", AddrMode::ZeroPageX, 4, 2, ldy),
     instr!("LDA", AddrMode::ZeroPageX, 4, 2, lda),
     instr!("LDX", AddrMode::ZeroPageY, 4, 2, ldx),
-    None,
+    il_instr!("LAX", AddrMode::ZeroPageY, 4, 2, lax),
     instr!("CLV", AddrMode::Implied, 2, 1, clv),
     instr!("LDA", AddrMode::AbsoluteY, 4, 3, lda),
     instr!("TSX", AddrMode::Implied, 2, 1, tsx),
@@ -220,15 +220,15 @@ pub(crate) const INSTRUCTIONS_TABLE: [Option<Instruction>; 256] = [
     instr!("LDY", AddrMode::AbsoluteX, 4, 3, ldy),
     instr!("LDA", AddrMode::AbsoluteX, 4, 3, lda),
     instr!("LDX", AddrMode::AbsoluteY, 4, 3, ldx),
-    None,
+    il_instr!("LAX", AddrMode::AbsoluteY, 4, 3, lax),
     instr!("CPY", AddrMode::Immediate, 2, 2, cpy),
     instr!("CMP", AddrMode::IndirectX, 6, 2, cmp),
     il_instr!("DOP", AddrMode::Immediate, 2, 2, dop),
-    None,
+    il_instr!("DCP", AddrMode::IndirectX, 8, 2, dcp),
     instr!("CPY", AddrMode::ZeroPage, 3, 2, cpy),
     instr!("CMP", AddrMode::ZeroPage, 3, 2, cmp),
     instr!("DEC", AddrMode::ZeroPage, 5, 2, dec),
-    None,
+    il_instr!("DCP", AddrMode::ZeroPage, 5, 2, dcp),
     instr!("INY", AddrMode::Implied, 2, 1, iny),
     instr!("CMP", AddrMode::Immediate, 2, 2, cmp),
     instr!("DEX", AddrMode::Implied, 2, 1, dex),
@@ -236,23 +236,23 @@ pub(crate) const INSTRUCTIONS_TABLE: [Option<Instruction>; 256] = [
     instr!("CPY", AddrMode::Absolute, 4, 3, cpy),
     instr!("CMP", AddrMode::Absolute, 4, 3, cmp),
     instr!("DEC", AddrMode::Absolute, 6, 3, dec),
-    None,
+    il_instr!("DCP", AddrMode::Absolute, 6, 3, dcp),
     instr!("BNE", AddrMode::Relative, 2, 2, bne),
     instr!("CMP", AddrMode::IndirectY, 5, 2, cmp),
     None,
-    None,
+    il_instr!("DCP", AddrMode::IndirectY, 8, 2, dcp),
     il_instr!("DOP", AddrMode::ZeroPageX, 4, 2, dop),
     instr!("CMP", AddrMode::ZeroPageX, 4, 2, cmp),
     instr!("DEC", AddrMode::ZeroPageX, 6, 2, dec),
-    None,
+    il_instr!("DCP", AddrMode::ZeroPageX, 6, 2, dcp),
     instr!("CLD", AddrMode::Implied, 2, 1, cld),
     instr!("CMP", AddrMode::AbsoluteY, 4, 3, cmp),
-    il_instr!("NOP2", AddrMode::Implied, 2, 1, nop),
-    None,
+    il_instr!("NOP", AddrMode::Implied, 2, 1, nop),
+    il_instr!("DCP", AddrMode::AbsoluteY, 7, 3, dcp),
     il_instr!("TOP", AddrMode::AbsoluteX, 4, 3, top),
     instr!("CMP", AddrMode::AbsoluteX, 4, 3, cmp),
     instr!("DEC", AddrMode::AbsoluteX, 7, 3, dec),
-    None,
+    il_instr!("DCP", AddrMode::AbsoluteX, 7, 3, dcp),
     instr!("CPX", AddrMode::Immediate, 2, 2, cpx),
     instr!("SBC", AddrMode::IndirectX, 6, 2, sbc),
     il_instr!("DOP", AddrMode::Immediate, 2, 2, dop),
@@ -264,7 +264,7 @@ pub(crate) const INSTRUCTIONS_TABLE: [Option<Instruction>; 256] = [
     instr!("INX", AddrMode::Implied, 2, 1, inx),
     instr!("SBC", AddrMode::Immediate, 2, 2, sbc),
     instr!("NOP", AddrMode::Implied, 2, 1, nop),
-    None,
+    il_instr!("SBC", AddrMode::Immediate, 2, 2, sbc),
     instr!("CPX", AddrMode::Absolute, 4, 3, cpx),
     instr!("SBC", AddrMode::Absolute, 4, 3, sbc),
     instr!("INC", AddrMode::Absolute, 6, 3, inc),
@@ -279,7 +279,7 @@ pub(crate) const INSTRUCTIONS_TABLE: [Option<Instruction>; 256] = [
     None,
     instr!("SED", AddrMode::Implied, 2, 1, sed),
     instr!("SBC", AddrMode::AbsoluteY, 4, 3, sbc),
-    il_instr!("NOP2", AddrMode::Implied, 2, 1, nop),
+    il_instr!("NOP", AddrMode::Implied, 2, 1, nop),
     None,
     il_instr!("TOP", AddrMode::AbsoluteX, 4, 3, top),
     instr!("SBC", AddrMode::AbsoluteX, 4, 3, sbc),
@@ -831,10 +831,6 @@ fn aac(nes: &mut NES, mode: &AddrMode) -> usize {
     unimplemented!("aac")
 }
 
-fn aax(nes: &mut NES, mode: &AddrMode) -> usize {
-    unimplemented!("aax")
-}
-
 fn arr(nes: &mut NES, mode: &AddrMode) -> usize {
     unimplemented!("arr")
 }
@@ -856,15 +852,27 @@ fn axs(nes: &mut NES, mode: &AddrMode) -> usize {
 }
 
 fn dcp(nes: &mut NES, mode: &AddrMode) -> usize {
-    unimplemented!("dcp")
+    let (addr, _) = nes.get_operating_address(mode);
+    let value = nes.cpu_read(addr);
+    let result = value.wrapping_sub(1);
+
+    nes.cpu_write(addr, result);
+
+    if result < nes.cpu_registers.accumulator {
+        nes.cpu_registers.status.set_carry(true);
+    }
+
+    nes.update_zero_and_negative_flags(nes.cpu_registers.accumulator.wrapping_sub(result));
+
+    0
 }
 
 fn dop(_nes: &mut NES, _mode: &AddrMode) -> usize {
     0
 }
 
-fn isc(nes: &mut NES, mode: &AddrMode) -> usize {
-    unimplemented!("isc")
+fn isb(nes: &mut NES, mode: &AddrMode) -> usize {
+    unimplemented!("isb")
 }
 
 fn kil(_nes: &mut NES, _mode: &AddrMode) -> usize {
@@ -876,7 +884,14 @@ fn lar(nes: &mut NES, mode: &AddrMode) -> usize {
 }
 
 fn lax(nes: &mut NES, mode: &AddrMode) -> usize {
-    unimplemented!("lax")
+    let (addr, page_crossed) = nes.get_operating_address(mode);
+
+    let value = nes.cpu_read(addr);
+
+    nes.cpu_registers.x = value;
+    nes.set_accumulator(value);
+
+    page_crossed.into()
 }
 
 fn rla(nes: &mut NES, mode: &AddrMode) -> usize {
@@ -885,6 +900,16 @@ fn rla(nes: &mut NES, mode: &AddrMode) -> usize {
 
 fn rra(nes: &mut NES, mode: &AddrMode) -> usize {
     unimplemented!("rra")
+}
+
+fn sax(nes: &mut NES, mode: &AddrMode) -> usize {
+    let (addr, _) = nes.get_operating_address(mode);
+
+    let result = nes.cpu_registers.accumulator & nes.cpu_registers.x;
+
+    nes.cpu_write(addr, result);
+
+    0
 }
 
 fn slo(nes: &mut NES, mode: &AddrMode) -> usize {

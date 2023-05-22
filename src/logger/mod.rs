@@ -23,10 +23,10 @@ fn instruction_log(nes: &NES) -> String {
     let opcode = nes.cpu_read(nes.cpu_registers.program_counter);
     let instruction = match &cpu::instructions::INSTRUCTIONS_TABLE[opcode as usize] {
         Some(instruction) => instruction,
-        None => panic!("Invalid opcode: {:#04X}", opcode),
+        None => return format!("{:02X}", opcode)
     };
 
-    match instruction.len {
+    let log = match instruction.len {
         1 => format!("{:02X}", opcode),
         2 => {
             let operand = nes.cpu_read(nes.cpu_registers.program_counter + 1);
@@ -38,6 +38,13 @@ fn instruction_log(nes: &NES) -> String {
             format!("{:02X} {:02X} {:02X}", opcode, operand1, operand2)
         }
         _ => unreachable!(),
+    };
+
+    if instruction.name == "DOP" {
+        // add an asterisk to the end of the string padded to 10 characters
+        format!("{: <9}*", log)
+    } else {
+        log
     }
 }
 
@@ -45,7 +52,13 @@ fn assembly_log(nes: &NES) -> String {
     let opcode = nes.cpu_read(nes.cpu_registers.program_counter);
     let instruction = match &cpu::instructions::INSTRUCTIONS_TABLE[opcode as usize] {
         Some(instruction) => instruction,
-        None => panic!("Invalid opcode: {:#04X}", opcode),
+        None => return "???".to_string(),
+    };
+
+    let instruction_name = if instruction.name == "DOP" {
+        "NOP"
+    } else {
+        instruction.name
     };
 
     let program_counter = nes.cpu_registers.program_counter;
@@ -63,25 +76,25 @@ fn assembly_log(nes: &NES) -> String {
     let addr_16 = nes.cpu_read_u16(program_counter + 1);
 
     match instruction.mode {
-        AddrMode::Accumulator => format!("{} A", instruction.name),
-        AddrMode::Implied => format!("{}", instruction.name),
+        AddrMode::Accumulator => format!("{} A", instruction_name),
+        AddrMode::Implied => format!("{}", instruction_name),
         AddrMode::Relative => {
             let jump_addr = (program_counter + 2).wrapping_add(addr_16 as i8 as u16);
 
-            format!("{} ${:02X}", instruction.name, jump_addr)
+            format!("{} ${:02X}", instruction_name, jump_addr)
         }
         AddrMode::Immediate => {
-            format!("{} #${:02X}", instruction.name, addr)
+            format!("{} #${:02X}", instruction_name, addr)
         }
         AddrMode::ZeroPage => {
-            format!("{} ${:02X} = {:02X}", instruction.name, mem_addr, stored)
+            format!("{} ${:02X} = {:02X}", instruction_name, mem_addr, stored)
         }
         AddrMode::Absolute => {
-            if instruction.name == "JMP" || instruction.name == "JSR" {
-                return format!("{} ${:04X}", instruction.name, mem_addr);
+            if instruction_name == "JMP" || instruction_name == "JSR" {
+                return format!("{} ${:04X}", instruction_name, mem_addr);
             }
 
-            format!("{} ${:04X} = {:02X}", instruction.name, mem_addr, stored)
+            format!("{} ${:04X} = {:02X}", instruction_name, mem_addr, stored)
         }
         AddrMode::Indirect => {
             let jump_addr = if addr_16 & 0x00FF == 0x00FF {
@@ -95,37 +108,37 @@ fn assembly_log(nes: &NES) -> String {
 
             format!(
                 "{} (${:04X}) = {:04X}",
-                instruction.name, addr_16, jump_addr
+                instruction_name, addr_16, jump_addr
             )
         }
         AddrMode::ZeroPageX => {
             format!(
                 "{} ${:02X},X @ {:02X} = {:02X}",
-                instruction.name, addr, mem_addr, stored
+                instruction_name, addr, mem_addr, stored
             )
         }
         AddrMode::ZeroPageY => {
             format!(
                 "{} ${:02X},Y @ {:02X} = {:02X}",
-                instruction.name, addr, mem_addr, stored
+                instruction_name, addr, mem_addr, stored
             )
         }
         AddrMode::AbsoluteX => {
             format!(
                 "{} ${:04X},X @ {:04X} = {:02X}",
-                instruction.name, addr_16, mem_addr, stored
+                instruction_name, addr_16, mem_addr, stored
             )
         }
         AddrMode::AbsoluteY => {
             format!(
                 "{} ${:04X},Y @ {:04X} = {:02X}",
-                instruction.name, addr_16, mem_addr, stored
+                instruction_name, addr_16, mem_addr, stored
             )
         }
         AddrMode::IndirectX => {
             format!(
                 "{} (${:02X},X) @ {:02X} = {:04X} = {:02X}",
-                instruction.name,
+                instruction_name,
                 addr,
                 addr.wrapping_add(nes.cpu_registers.x),
                 mem_addr,
@@ -135,7 +148,7 @@ fn assembly_log(nes: &NES) -> String {
         AddrMode::IndirectY => {
             format!(
                 "{} (${:02X}),Y = {:04X} @ {:04X} = {:02X}",
-                instruction.name,
+                instruction_name,
                 addr,
                 mem_addr.wrapping_sub(nes.cpu_registers.y as u16),
                 mem_addr,

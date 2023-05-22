@@ -157,7 +157,7 @@ impl CPU for NES {
             if let Some(instruction) = &instructions::INSTRUCTIONS_TABLE[opcode as usize] {
                 instruction
             } else {
-                panic!("Invalid opcode: {:#04X}", opcode);
+                unimplemented!("Opcode {:#04X} is not implemented yet!", opcode)
             };
 
         let cycles = instruction.execute(self);

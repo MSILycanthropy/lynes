@@ -51,10 +51,6 @@ pub trait CPU {
         u16::from_le_bytes([low, high])
     }
     fn execute_instruction(&mut self, opcode: u8) -> (u16, usize);
-    fn update_zero_and_negative_flags(&mut self, value: u8);
-    fn set_accumulator(&mut self, value: u8);
-    fn branch(&mut self, condition: bool) -> usize;
-    fn compare(&mut self, register: u8, value: u8);
 }
 
 impl CPU for NES {
@@ -164,45 +160,5 @@ impl CPU for NES {
         let cycles = instruction.execute(self);
 
         (instruction.size(), cycles)
-    }
-
-    fn set_accumulator(&mut self, value: u8) {
-        self.cpu_registers.accumulator = value;
-
-        self.update_zero_and_negative_flags(value);
-    }
-
-    fn update_zero_and_negative_flags(&mut self, value: u8) {
-        self.cpu_registers.status.set_zero(value == 0);
-        self.cpu_registers.status.set_negative(value >> 7 == 1);
-    }
-
-    fn branch(&mut self, condition: bool) -> usize {
-        if !condition {
-            return 0;
-        }
-
-        let old_addr = self.cpu_registers.program_counter;
-
-        let offset = self.cpu_read(self.cpu_registers.program_counter) as i8;
-        let new_addr = old_addr.wrapping_add(1).wrapping_add(offset as u16);
-
-        // TODO: For some rason this fucks stuff up? Docs say this is how it should work tho
-        // let cycles = if old_addr & 0xFF00 != new_addr & 0xFF00 {
-        //     2
-        // } else {
-        //     1
-        // };
-
-        self.cpu_registers.program_counter = new_addr;
-
-        1
-    }
-
-    fn compare(&mut self, register: u8, value: u8) {
-        let result = register.wrapping_sub(value);
-
-        self.cpu_registers.status.set_carry(register >= value);
-        self.update_zero_and_negative_flags(result);
     }
 }

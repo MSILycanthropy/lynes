@@ -256,11 +256,11 @@ pub(crate) const INSTRUCTIONS_TABLE: [Option<Instruction>; 256] = [
     instr!("CPX", AddrMode::Immediate, 2, 2, cpx),
     instr!("SBC", AddrMode::IndirectX, 6, 2, sbc),
     il_instr!("DOP", AddrMode::Immediate, 2, 2, dop),
-    None,
+    il_instr!("ISB", AddrMode::IndirectX, 8, 2, isb),
     instr!("CPX", AddrMode::ZeroPage, 3, 2, cpx),
     instr!("SBC", AddrMode::ZeroPage, 3, 2, sbc),
     instr!("INC", AddrMode::ZeroPage, 5, 2, inc),
-    None,
+    il_instr!("ISB", AddrMode::ZeroPage, 5, 2, isb),
     instr!("INX", AddrMode::Implied, 2, 1, inx),
     instr!("SBC", AddrMode::Immediate, 2, 2, sbc),
     instr!("NOP", AddrMode::Implied, 2, 1, nop),
@@ -268,23 +268,23 @@ pub(crate) const INSTRUCTIONS_TABLE: [Option<Instruction>; 256] = [
     instr!("CPX", AddrMode::Absolute, 4, 3, cpx),
     instr!("SBC", AddrMode::Absolute, 4, 3, sbc),
     instr!("INC", AddrMode::Absolute, 6, 3, inc),
-    None,
+    il_instr!("ISB", AddrMode::Absolute, 6, 3, isb),
     instr!("BEQ", AddrMode::Relative, 2, 2, beq),
     instr!("SBC", AddrMode::IndirectY, 5, 2, sbc),
     None,
-    None,
+    il_instr!("ISB", AddrMode::IndirectY, 8, 2, isb),
     il_instr!("DOP", AddrMode::ZeroPageX, 4, 2, dop),
     instr!("SBC", AddrMode::ZeroPageX, 4, 2, sbc),
     instr!("INC", AddrMode::ZeroPageX, 6, 2, inc),
-    None,
+    il_instr!("ISB", AddrMode::ZeroPageX, 6, 2, isb),
     instr!("SED", AddrMode::Implied, 2, 1, sed),
     instr!("SBC", AddrMode::AbsoluteY, 4, 3, sbc),
     il_instr!("NOP", AddrMode::Implied, 2, 1, nop),
-    None,
+    il_instr!("ISB", AddrMode::AbsoluteY, 7, 3, isb),
     il_instr!("TOP", AddrMode::AbsoluteX, 4, 3, top),
     instr!("SBC", AddrMode::AbsoluteX, 4, 3, sbc),
     instr!("INC", AddrMode::AbsoluteX, 7, 3, inc),
-    None,
+    il_instr!("ISB", AddrMode::AbsoluteX, 7, 3, isb),
 ];
 
 pub struct Instruction {
@@ -310,18 +310,7 @@ fn adc(nes: &mut NES, mode: &AddrMode) -> usize {
     let (addr, page_crossed) = nes.get_operating_address(mode);
     let value = nes.cpu_read(addr);
 
-    let result: u16 = nes.cpu_registers.accumulator as u16
-        + value as u16
-        + Into::<u16>::into(nes.cpu_registers.status.carry());
-    nes.cpu_registers.status.set_carry(result > 0xFF);
-
-    let result = result as u8;
-
-    nes.cpu_registers
-        .status
-        .set_overflow((value ^ result) & (result ^ nes.cpu_registers.accumulator) & 0x80 != 0);
-
-    nes.set_accumulator(result);
+    add_to_accumulator(nes, value);
 
     page_crossed.into()
 }
@@ -330,7 +319,7 @@ fn and(nes: &mut NES, mode: &AddrMode) -> usize {
     let (addr, page_crossed) = nes.get_operating_address(mode);
     let value = nes.cpu_read(addr);
 
-    nes.set_accumulator(nes.cpu_registers.accumulator & value);
+    set_accumulator(nes, nes.cpu_registers.accumulator & value);
 
     page_crossed.into()
 }
@@ -339,7 +328,7 @@ fn asl(nes: &mut NES, mode: &AddrMode) -> usize {
     let old_value = if let AddrMode::Accumulator = mode {
         let old_value = nes.cpu_registers.accumulator;
 
-        nes.set_accumulator(old_value << 1);
+        set_accumulator(nes, old_value << 1);
 
         old_value
     } else {
@@ -348,7 +337,7 @@ fn asl(nes: &mut NES, mode: &AddrMode) -> usize {
         let result = old_value << 1;
 
         nes.cpu_write(addr, result);
-        nes.update_zero_and_negative_flags(result);
+        update_zero_and_negative_flags(nes, result);
 
         old_value
     };
@@ -359,15 +348,15 @@ fn asl(nes: &mut NES, mode: &AddrMode) -> usize {
 }
 
 fn bcc(nes: &mut NES, _mode: &AddrMode) -> usize {
-    nes.branch(!nes.cpu_registers.status.carry())
+    branch(nes, !nes.cpu_registers.status.carry())
 }
 
 fn bcs(nes: &mut NES, _mode: &AddrMode) -> usize {
-    nes.branch(nes.cpu_registers.status.carry())
+    branch(nes, nes.cpu_registers.status.carry())
 }
 
 fn beq(nes: &mut NES, _mode: &AddrMode) -> usize {
-    nes.branch(nes.cpu_registers.status.zero())
+    branch(nes, nes.cpu_registers.status.zero())
 }
 
 fn bit(nes: &mut NES, mode: &AddrMode) -> usize {
@@ -383,15 +372,15 @@ fn bit(nes: &mut NES, mode: &AddrMode) -> usize {
 }
 
 fn bmi(nes: &mut NES, _mode: &AddrMode) -> usize {
-    nes.branch(nes.cpu_registers.status.negative())
+    branch(nes, nes.cpu_registers.status.negative())
 }
 
 fn bne(nes: &mut NES, _mode: &AddrMode) -> usize {
-    nes.branch(!nes.cpu_registers.status.zero())
+    branch(nes, !nes.cpu_registers.status.zero())
 }
 
 fn bpl(nes: &mut NES, _mode: &AddrMode) -> usize {
-    nes.branch(!nes.cpu_registers.status.negative())
+    branch(nes, !nes.cpu_registers.status.negative())
 }
 
 fn brk(nes: &mut NES, _mode: &AddrMode) -> usize {
@@ -401,11 +390,11 @@ fn brk(nes: &mut NES, _mode: &AddrMode) -> usize {
 }
 
 fn bvc(nes: &mut NES, _mode: &AddrMode) -> usize {
-    nes.branch(!nes.cpu_registers.status.overflow())
+    branch(nes, !nes.cpu_registers.status.overflow())
 }
 
 fn bvs(nes: &mut NES, _mode: &AddrMode) -> usize {
-    nes.branch(nes.cpu_registers.status.overflow())
+    branch(nes, nes.cpu_registers.status.overflow())
 }
 
 fn clc(nes: &mut NES, _mode: &AddrMode) -> usize {
@@ -436,7 +425,7 @@ fn cmp(nes: &mut NES, mode: &AddrMode) -> usize {
     let (addr, page_crossed) = nes.get_operating_address(mode);
     let value = nes.cpu_read(addr);
 
-    nes.compare(nes.cpu_registers.accumulator, value);
+    compare(nes, nes.cpu_registers.accumulator, value);
 
     page_crossed.into()
 }
@@ -445,7 +434,7 @@ fn cpx(nes: &mut NES, mode: &AddrMode) -> usize {
     let (addr, _) = nes.get_operating_address(mode);
     let value = nes.cpu_read(addr);
 
-    nes.compare(nes.cpu_registers.x, value);
+    compare(nes, nes.cpu_registers.x, value);
 
     0
 }
@@ -454,7 +443,7 @@ fn cpy(nes: &mut NES, mode: &AddrMode) -> usize {
     let (addr, _) = nes.get_operating_address(mode);
     let value = nes.cpu_read(addr);
 
-    nes.compare(nes.cpu_registers.y, value);
+    compare(nes, nes.cpu_registers.y, value);
 
     0
 }
@@ -465,7 +454,7 @@ fn dec(nes: &mut NES, mode: &AddrMode) -> usize {
     let result = old_value.wrapping_sub(1);
 
     nes.cpu_write(addr, result);
-    nes.update_zero_and_negative_flags(result);
+    update_zero_and_negative_flags(nes, result);
 
     0
 }
@@ -474,7 +463,7 @@ fn dex(nes: &mut NES, _mode: &AddrMode) -> usize {
     let result = nes.cpu_registers.x.wrapping_sub(1);
 
     nes.cpu_registers.x = result;
-    nes.update_zero_and_negative_flags(result);
+    update_zero_and_negative_flags(nes, result);
 
     0
 }
@@ -483,7 +472,7 @@ fn dey(nes: &mut NES, _mode: &AddrMode) -> usize {
     let result = nes.cpu_registers.y.wrapping_sub(1);
 
     nes.cpu_registers.y = result;
-    nes.update_zero_and_negative_flags(result);
+    update_zero_and_negative_flags(nes, result);
 
     0
 }
@@ -493,18 +482,15 @@ fn eor(nes: &mut NES, mode: &AddrMode) -> usize {
     let value = nes.cpu_read(addr);
     let result = nes.cpu_registers.accumulator ^ value;
 
-    nes.set_accumulator(result);
+    set_accumulator(nes, result);
 
     page_crossed.into()
 }
 
 fn inc(nes: &mut NES, mode: &AddrMode) -> usize {
     let (addr, _) = nes.get_operating_address(mode);
-    let old_value = nes.cpu_read(addr);
-    let result = old_value.wrapping_add(1);
 
-    nes.cpu_write(addr, result);
-    nes.update_zero_and_negative_flags(result);
+    increment_memory(nes, addr);
 
     0
 }
@@ -513,7 +499,7 @@ fn inx(nes: &mut NES, _mode: &AddrMode) -> usize {
     let result = nes.cpu_registers.x.wrapping_add(1);
 
     nes.cpu_registers.x = result;
-    nes.update_zero_and_negative_flags(result);
+    update_zero_and_negative_flags(nes, result);
 
     0
 }
@@ -522,7 +508,7 @@ fn iny(nes: &mut NES, _mode: &AddrMode) -> usize {
     let result = nes.cpu_registers.y.wrapping_add(1);
 
     nes.cpu_registers.y = result;
-    nes.update_zero_and_negative_flags(result);
+    update_zero_and_negative_flags(nes, result);
 
     0
 }
@@ -548,7 +534,7 @@ fn jsr(nes: &mut NES, mode: &AddrMode) -> usize {
 fn lda(nes: &mut NES, mode: &AddrMode) -> usize {
     let (addr, page_crossed) = nes.get_operating_address(mode);
 
-    nes.set_accumulator(nes.cpu_read(addr));
+    set_accumulator(nes, nes.cpu_read(addr));
 
     page_crossed.into()
 }
@@ -557,7 +543,7 @@ fn ldx(nes: &mut NES, mode: &AddrMode) -> usize {
     let (addr, page_crossed) = nes.get_operating_address(mode);
 
     nes.cpu_registers.x = nes.cpu_read(addr);
-    nes.update_zero_and_negative_flags(nes.cpu_registers.x);
+    update_zero_and_negative_flags(nes, nes.cpu_registers.x);
 
     page_crossed.into()
 }
@@ -566,7 +552,7 @@ fn ldy(nes: &mut NES, mode: &AddrMode) -> usize {
     let (addr, page_crossed) = nes.get_operating_address(mode);
 
     nes.cpu_registers.y = nes.cpu_read(addr);
-    nes.update_zero_and_negative_flags(nes.cpu_registers.y);
+    update_zero_and_negative_flags(nes, nes.cpu_registers.y);
 
     page_crossed.into()
 }
@@ -576,7 +562,7 @@ fn lsr(nes: &mut NES, mode: &AddrMode) -> usize {
         AddrMode::Accumulator => {
             let old_value = nes.cpu_registers.accumulator;
 
-            nes.set_accumulator(old_value >> 1);
+            set_accumulator(nes, old_value >> 1);
 
             old_value
         }
@@ -586,7 +572,7 @@ fn lsr(nes: &mut NES, mode: &AddrMode) -> usize {
             let result = old_value >> 1;
 
             nes.cpu_write(addr, result);
-            nes.update_zero_and_negative_flags(result);
+            update_zero_and_negative_flags(nes, result);
 
             old_value
         }
@@ -606,7 +592,7 @@ fn ora(nes: &mut NES, mode: &AddrMode) -> usize {
     let value = nes.cpu_read(addr);
     let result = nes.cpu_registers.accumulator | value;
 
-    nes.set_accumulator(result);
+    set_accumulator(nes, result);
 
     page_crossed.into()
 }
@@ -629,7 +615,7 @@ fn php(nes: &mut NES, _mode: &AddrMode) -> usize {
 fn pla(nes: &mut NES, _mode: &AddrMode) -> usize {
     let result = nes.stack_pop();
 
-    nes.set_accumulator(result);
+    set_accumulator(nes, result);
 
     0
 }
@@ -649,7 +635,7 @@ fn rol(nes: &mut NES, mode: &AddrMode) -> usize {
             let old_value = nes.cpu_registers.accumulator;
             let result = (old_value << 1) | (nes.cpu_registers.status.carry() as u8);
 
-            nes.set_accumulator(result);
+            set_accumulator(nes, result);
 
             old_value
         }
@@ -659,7 +645,7 @@ fn rol(nes: &mut NES, mode: &AddrMode) -> usize {
             let result = (old_value << 1) | (nes.cpu_registers.status.carry() as u8);
 
             nes.cpu_write(addr, result);
-            nes.update_zero_and_negative_flags(result);
+            update_zero_and_negative_flags(nes, result);
 
             old_value
         }
@@ -676,7 +662,7 @@ fn ror(nes: &mut NES, mode: &AddrMode) -> usize {
             let old_value = nes.cpu_registers.accumulator;
             let result = (old_value >> 1) | ((nes.cpu_registers.status.carry() as u8) << 7);
 
-            nes.set_accumulator(result);
+            set_accumulator(nes, result);
 
             old_value
         }
@@ -686,7 +672,7 @@ fn ror(nes: &mut NES, mode: &AddrMode) -> usize {
             let result = (old_value >> 1) | ((nes.cpu_registers.status.carry() as u8) << 7);
 
             nes.cpu_write(addr, result);
-            nes.update_zero_and_negative_flags(result);
+            update_zero_and_negative_flags(nes, result);
 
             old_value
         }
@@ -722,18 +708,7 @@ fn sbc(nes: &mut NES, mode: &AddrMode) -> usize {
     let temp = nes.cpu_read(addr);
     let value = temp.wrapping_neg().wrapping_sub(1);
 
-    let result: u16 = nes.cpu_registers.accumulator as u16
-        + value as u16
-        + Into::<u16>::into(nes.cpu_registers.status.carry());
-    nes.cpu_registers.status.set_carry(result > 0xFF);
-
-    let result = result as u8;
-
-    nes.cpu_registers
-        .status
-        .set_overflow((value ^ result) & (result ^ nes.cpu_registers.accumulator) & 0x80 != 0);
-
-    nes.set_accumulator(result);
+    add_to_accumulator(nes, value);
 
     page_crossed.into()
 }
@@ -786,7 +761,7 @@ fn sty(nes: &mut NES, mode: &AddrMode) -> usize {
 fn tax(nes: &mut NES, _mode: &AddrMode) -> usize {
     nes.cpu_registers.x = nes.cpu_registers.accumulator;
 
-    nes.update_zero_and_negative_flags(nes.cpu_registers.x);
+    update_zero_and_negative_flags(nes, nes.cpu_registers.x);
 
     0
 }
@@ -794,7 +769,7 @@ fn tax(nes: &mut NES, _mode: &AddrMode) -> usize {
 fn tay(nes: &mut NES, _mode: &AddrMode) -> usize {
     nes.cpu_registers.y = nes.cpu_registers.accumulator;
 
-    nes.update_zero_and_negative_flags(nes.cpu_registers.y);
+    update_zero_and_negative_flags(nes, nes.cpu_registers.y);
 
     0
 }
@@ -802,13 +777,13 @@ fn tay(nes: &mut NES, _mode: &AddrMode) -> usize {
 fn tsx(nes: &mut NES, _mode: &AddrMode) -> usize {
     nes.cpu_registers.x = nes.cpu_registers.stack_pointer;
 
-    nes.update_zero_and_negative_flags(nes.cpu_registers.x);
+    update_zero_and_negative_flags(nes, nes.cpu_registers.x);
 
     0
 }
 
 fn txa(nes: &mut NES, _mode: &AddrMode) -> usize {
-    nes.set_accumulator(nes.cpu_registers.x);
+    set_accumulator(nes, nes.cpu_registers.x);
 
     0
 }
@@ -820,7 +795,7 @@ fn txs(nes: &mut NES, _mode: &AddrMode) -> usize {
 }
 
 fn tya(nes: &mut NES, _mode: &AddrMode) -> usize {
-    nes.set_accumulator(nes.cpu_registers.y);
+    set_accumulator(nes, nes.cpu_registers.y);
 
     0
 }
@@ -862,7 +837,7 @@ fn dcp(nes: &mut NES, mode: &AddrMode) -> usize {
         nes.cpu_registers.status.set_carry(true);
     }
 
-    nes.update_zero_and_negative_flags(nes.cpu_registers.accumulator.wrapping_sub(result));
+    update_zero_and_negative_flags(nes, nes.cpu_registers.accumulator.wrapping_sub(result));
 
     0
 }
@@ -872,7 +847,13 @@ fn dop(_nes: &mut NES, _mode: &AddrMode) -> usize {
 }
 
 fn isb(nes: &mut NES, mode: &AddrMode) -> usize {
-    unimplemented!("isb")
+    let (addr, _) = nes.get_operating_address(mode);
+    let value = increment_memory(nes, addr);
+    let result = (value as i8).wrapping_neg().wrapping_sub(1) as u8;
+
+    add_to_accumulator(nes, result);
+
+    0
 }
 
 fn kil(_nes: &mut NES, _mode: &AddrMode) -> usize {
@@ -889,7 +870,7 @@ fn lax(nes: &mut NES, mode: &AddrMode) -> usize {
     let value = nes.cpu_read(addr);
 
     nes.cpu_registers.x = value;
-    nes.set_accumulator(value);
+    set_accumulator(nes, value);
 
     page_crossed.into()
 }
@@ -940,6 +921,67 @@ fn xaa(nes: &mut NES, mode: &AddrMode) -> usize {
 
 fn xas(nes: &mut NES, mode: &AddrMode) -> usize {
     unimplemented!("xas")
+}
+
+fn add_to_accumulator(nes: &mut NES, value: u8) {
+    let result: u16 = nes.cpu_registers.accumulator as u16 + value as u16 + Into::<u16>::into(nes.cpu_registers.status.carry());
+    nes.cpu_registers.status.set_carry(result > 0xFF);
+
+    let result = result as u8;
+
+    nes.cpu_registers.status.set_overflow((value ^ result) & (result ^ nes.cpu_registers.accumulator) & 0x80 != 0);
+
+    set_accumulator(nes, result);
+}
+
+fn increment_memory(nes: &mut NES, addr: u16) -> u8 {
+    let old_value = nes.cpu_read(addr);
+    let result = old_value.wrapping_add(1);
+
+    nes.cpu_write(addr, result);
+    update_zero_and_negative_flags(nes, result);
+
+    result
+}
+
+fn set_accumulator(nes: &mut NES, value: u8) {
+    nes.cpu_registers.accumulator = value;
+
+    update_zero_and_negative_flags(nes, value);
+}
+
+fn update_zero_and_negative_flags(nes: &mut NES, value: u8) {
+    nes.cpu_registers.status.set_zero(value == 0);
+    nes.cpu_registers.status.set_negative(value >> 7 == 1);
+}
+
+fn branch(nes: &mut NES, condition: bool) -> usize {
+    if !condition {
+        return 0;
+    }
+
+    let old_addr = nes.cpu_registers.program_counter;
+
+    let offset = nes.cpu_read(nes.cpu_registers.program_counter) as i8;
+    let new_addr = old_addr.wrapping_add(1).wrapping_add(offset as u16);
+
+    // TODO: For some rason this fucks stuff up? Docs say this is how it should work tho
+    // let cycles = if old_addr & 0xFF00 != new_addr & 0xFF00 {
+    //     2
+    // } else {
+    //     1
+    // };
+
+    nes.cpu_registers.program_counter = new_addr;
+
+    1
+}
+
+fn compare(nes: &mut NES, register: u8, value: u8) {
+    let result = register.wrapping_sub(value);
+
+    nes.cpu_registers.status.set_carry(register >= value);
+    update_zero_and_negative_flags(nes, result);
 }
 
 mod test {

@@ -5,7 +5,7 @@ use crate::{
     NES,
 };
 
-const DUMB_EXTRA_NOPS: [&'static str; 3] = ["DOP", "TOP", "NOP2"];
+const ILLEGAL_NOPS: [&'static str; 3] = ["DOP", "TOP", "NOP2"];
 
 pub fn log(nes: &NES) {
     println!(
@@ -42,11 +42,10 @@ fn instruction_log(nes: &NES) -> String {
         _ => unreachable!(),
     };
 
-    if DUMB_EXTRA_NOPS.contains(&instruction.name) {
-        // add an asterisk to the end of the string padded to 10 characters
-        format!("{: <9}*", log)
-    } else {
+    if instruction.legal {
         log
+    } else {
+        format!("{: <9}*", log)
     }
 }
 
@@ -57,7 +56,7 @@ fn assembly_log(nes: &NES) -> String {
         None => return "???".to_string(),
     };
 
-    let instruction_name = if DUMB_EXTRA_NOPS.contains(&instruction.name) {
+    let instruction_name = if ILLEGAL_NOPS.contains(&instruction.name) {
         "NOP"
     } else {
         instruction.name

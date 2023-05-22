@@ -3,6 +3,7 @@ use crate::NES;
 pub(crate) mod instructions;
 pub(crate) mod registers;
 
+#[derive(Debug)]
 pub enum AddrMode {
     Implied,
     Accumulator,

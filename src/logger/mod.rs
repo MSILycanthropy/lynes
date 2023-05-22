@@ -5,6 +5,8 @@ use crate::{
     NES,
 };
 
+const DUMB_EXTRA_NOPS: [&'static str; 3] = ["DOP", "TOP", "NOP2"];
+
 pub fn log(nes: &NES) {
     println!(
         "{: <6}{: <10}{: <32}{}",
@@ -40,7 +42,7 @@ fn instruction_log(nes: &NES) -> String {
         _ => unreachable!(),
     };
 
-    if instruction.name == "DOP" {
+    if DUMB_EXTRA_NOPS.contains(&instruction.name) {
         // add an asterisk to the end of the string padded to 10 characters
         format!("{: <9}*", log)
     } else {
@@ -55,7 +57,7 @@ fn assembly_log(nes: &NES) -> String {
         None => return "???".to_string(),
     };
 
-    let instruction_name = if instruction.name == "DOP" {
+    let instruction_name = if DUMB_EXTRA_NOPS.contains(&instruction.name) {
         "NOP"
     } else {
         instruction.name

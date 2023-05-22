@@ -788,8 +788,10 @@ fn tay(nes: &mut NES, _mode: &AddrMode) -> usize {
     0
 }
 
-fn top(_nes: &mut NES, _mode: &AddrMode) -> usize {
-    0
+fn top(nes: &mut NES, mode: &AddrMode) -> usize {
+    let (_, page_crossed) = nes.get_operating_address(mode);
+
+    page_crossed.into()
 }
 
 fn tsx(nes: &mut NES, _mode: &AddrMode) -> usize {

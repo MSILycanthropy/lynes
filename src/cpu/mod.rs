@@ -150,12 +150,7 @@ impl CPU for NES {
     }
 
     fn execute_instruction(&mut self, opcode: u8) -> (u16, usize) {
-        let instruction =
-            if let Some(instruction) = &instructions::INSTRUCTIONS_TABLE[opcode as usize] {
-                instruction
-            } else {
-                unimplemented!("Opcode {:#04X} is not implemented yet!", opcode)
-            };
+        let instruction = &instructions::INSTRUCTIONS_TABLE[opcode as usize];
 
         let cycles = instruction.execute(self);
 

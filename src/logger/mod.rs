@@ -23,10 +23,7 @@ fn program_counter_log(program_counter: u16) -> String {
 
 fn instruction_log(nes: &NES) -> String {
     let opcode = nes.cpu_read(nes.cpu_registers.program_counter);
-    let instruction = match &cpu::instructions::INSTRUCTIONS_TABLE[opcode as usize] {
-        Some(instruction) => instruction,
-        None => return format!("{:02X}", opcode)
-    };
+    let instruction = &cpu::instructions::INSTRUCTIONS_TABLE[opcode as usize];
 
     let log = match instruction.len {
         1 => format!("{:02X}", opcode),
@@ -51,10 +48,7 @@ fn instruction_log(nes: &NES) -> String {
 
 fn assembly_log(nes: &NES) -> String {
     let opcode = nes.cpu_read(nes.cpu_registers.program_counter);
-    let instruction = match &cpu::instructions::INSTRUCTIONS_TABLE[opcode as usize] {
-        Some(instruction) => instruction,
-        None => return "???".to_string(),
-    };
+    let instruction = &cpu::instructions::INSTRUCTIONS_TABLE[opcode as usize];
 
     let instruction_name = if ILLEGAL_NOPS.contains(&instruction.name) {
         "NOP"

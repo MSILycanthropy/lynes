@@ -1,4 +1,4 @@
-use lynes::{*, renderer::Renderer, color::ColorPalette};
+use lynes::{*, renderer::Renderer};
 
 fn main() {
     let sdl_context = sdl2::init().unwrap();
@@ -100,7 +100,7 @@ fn show_nametable(frame: &mut renderer::Frame, nes: &NES, bg_bank: u16, spr_bank
                 msb >>= 1;
 
                 let color_index = palette[pixel as usize];
-                let color = SYSTEM_PALLETE[color_index as usize];
+                let color = nes.color_palette.get(color_index);
 
                 frame.set_pixel(tile_column * 8 + x, tile_row * 8 + y, color);
             }
@@ -138,7 +138,7 @@ fn show_nametable(frame: &mut renderer::Frame, nes: &NES, bg_bank: u16, spr_bank
                 }
 
                 let color_index = sprite_palette[pixel as usize];
-                let color = SYSTEM_PALLETE[color_index as usize];
+                let color = nes.color_palette.get(color_index);
 
                 let x = if flip_horizontally { 7 - x } else { x };
                 let y = if flip_vertically { 7 - y } else { y };

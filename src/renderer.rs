@@ -1,3 +1,5 @@
+use crate::color;
+
 const SCREEN_WIDTH: usize = 256;
 const SCREEN_HEIGHT: usize = 240;
 
@@ -9,16 +11,16 @@ impl Frame {
         Self(vec![0; SCREEN_WIDTH * SCREEN_HEIGHT * 3])
     }
 
-    pub fn set_pixel(&mut self, x: usize, y: usize, color: (u8, u8, u8)) {
+    pub fn set_pixel(&mut self, x: usize, y: usize, color: color::Color) {
         let index = (y * SCREEN_WIDTH + x) * 3;
 
         if index + 2 >= self.0.len() {
             return;
         }
 
-        self.0[index] = color.0;
-        self.0[index + 1] = color.1;
-        self.0[index + 2] = color.2;
+        self.0[index] = color.r;
+        self.0[index + 1] = color.g;
+        self.0[index + 2] = color.b;
     }
 }
 

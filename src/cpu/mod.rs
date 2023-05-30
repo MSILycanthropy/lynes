@@ -1,5 +1,3 @@
-use std::time::Instant;
-
 use crate::{ppu::PPU, NmiStatus, NES};
 
 pub(crate) mod instructions;

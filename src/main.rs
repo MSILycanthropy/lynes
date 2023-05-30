@@ -29,8 +29,6 @@ fn main() {
                     .build();
     nes.reset();
 
-    let mut palette_index = 0;
-    let mut right_bank = false;
     let mut frame = renderer::Frame::new();
 
     loop {
@@ -46,19 +44,13 @@ fn main() {
             } else {
                 0x0000
             };
-            show_nametable(&mut frame, &nes.ppu_vram, bg_bank, spr_bank, &nes.chr_rom, &nes.palette_table, &nes.oam_data, &nes.color_palette);
+            show_nametable(&mut frame, &nes, bg_bank, spr_bank);
 
             renderer.render(&frame);
             // renderer.render(&show_tiles(&nes.chr_rom, &nes.palette_table, &nes.color_palette, palette_index, right_bank));
             for event in event_pump.poll_iter() {
                 match event {
                     sdl2::event::Event::Quit { .. } => std::process::exit(0),
-                    sdl2::event::Event::KeyDown { keycode: Some(sdl2::keyboard::Keycode::P), .. } => {
-                        palette_index = (palette_index + 1) % 8;
-                    }
-                    sdl2::event::Event::KeyDown { keycode: Some(sdl2::keyboard::Keycode::L), .. } => {
-                        right_bank = !right_bank;
-                    }
                     _ => {}
                 }
             }
@@ -86,16 +78,16 @@ pub static SYSTEM_PALLETE: [(u8,u8,u8); 64] = [
 ];
 
 
-fn show_nametable(frame: &mut renderer::Frame, vram: &[u8; 2048], bg_bank: u16, spr_bank: u16, chr_rom: &Vec<u8>, palette_table: &[u8; 32], oam_data: &[u8; 256], color_palette: &ColorPalette) {
-    // println!("oam data: {:?}", oam_data);
+fn show_nametable(frame: &mut renderer::Frame, nes: &NES, bg_bank: u16, spr_bank: u16) {
+    // println!("oam data: {:?}", nes.oam_data);
 
     for i in 0..0x3c0 {
-        let tile_index = vram[i] as u16;
+        let tile_index = nes.ppu_vram[i] as u16;
         let tile_column  = i % 32;
         let tile_row = i / 32;
         let tile_addr  = tile_index * 16;
-        let tile = &chr_rom[(bg_bank + tile_addr) as usize..(bg_bank + tile_addr + 16) as usize];
-        let palette = bg_palette(vram, tile_column as u8, tile_row as u8, palette_table);
+        let tile = &nes.chr_rom[(bg_bank + tile_addr) as usize..(bg_bank + tile_addr + 16) as usize];
+        let palette = bg_palette(&nes.ppu_vram, tile_column as u8, tile_row as u8, &nes.palette_table);
 
         for y in 0..8 {
             let mut msb = tile[y];
@@ -115,46 +107,46 @@ fn show_nametable(frame: &mut renderer::Frame, vram: &[u8; 2048], bg_bank: u16, 
         }
     }
 
-    // for i in (0..oam_data.len()).step_by(4).rev() {
-    //     let tile_index = oam_data[i + 1] as u16;
-    //     let tile_x  = oam_data[i + 3] as usize;
-    //     let tile_y = oam_data[i] as usize;
+    for i in (0..nes.oam_data.len()).step_by(4).rev() {
+        let tile_index = nes.oam_data[i + 1] as u16;
+        let tile_x  = nes.oam_data[i + 3] as usize;
+        let tile_y = nes.oam_data[i] as usize;
 
-    //     // println!("tile_index: {:x}", tile_index);
+        // println!("tile_index: {:x}", tile_index);
 
-    //     let flip_vertically = oam_data[i + 2] >> 7 & 0x01 == 1;
-    //     let flip_horizontally = oam_data[i + 2] >> 6 & 0x01 == 1;
+        let flip_vertically = nes.oam_data[i + 2] >> 7 & 0x01 == 1;
+        let flip_horizontally = nes.oam_data[i + 2] >> 6 & 0x01 == 1;
 
-    //     let palette_index = oam_data[i + 2] & 0x03;
-    //     let sprite_palette = sprite_palette(palette_table, palette_index);
+        let palette_index = nes.oam_data[i + 2] & 0x03;
+        let sprite_palette = sprite_palette(&nes.palette_table, palette_index);
 
-    //     let tile_addr = tile_index * 16;
-    //     let tile = &chr_rom[(spr_bank + tile_addr) as usize..(spr_bank + tile_addr + 16) as usize];
+        let tile_addr = tile_index * 16;
+        let tile = &nes.chr_rom[(spr_bank + tile_addr) as usize..(spr_bank + tile_addr + 16) as usize];
 
-    //     for y in 0..8 {
-    //         let mut msb = tile[y];
-    //         let mut lsb = tile[y + 8];
+        for y in 0..8 {
+            let mut msb = tile[y];
+            let mut lsb = tile[y + 8];
 
-    //         for x in (0..8).rev() {
-    //             let pixel = (lsb & 0x01) << 1 | (msb & 0x01);
+            for x in (0..8).rev() {
+                let pixel = (lsb & 0x01) << 1 | (msb & 0x01);
 
-    //             lsb >>= 1;
-    //             msb >>= 1;
+                lsb >>= 1;
+                msb >>= 1;
 
-    //             if pixel == 0 {
-    //                 continue;
-    //             }
+                if pixel == 0 {
+                    continue;
+                }
 
-    //             let color_index = sprite_palette[pixel as usize];
-    //             let color = SYSTEM_PALLETE[color_index as usize];
+                let color_index = sprite_palette[pixel as usize];
+                let color = SYSTEM_PALLETE[color_index as usize];
 
-    //             let x = if flip_horizontally { 7 - x } else { x };
-    //             let y = if flip_vertically { 7 - y } else { y };
+                let x = if flip_horizontally { 7 - x } else { x };
+                let y = if flip_vertically { 7 - y } else { y };
 
-    //             frame.set_pixel(tile_x + x, tile_y + y, color);
-    //         }
-    //     }
-    // }
+                frame.set_pixel(tile_x + x, tile_y + y, color);
+            }
+        }
+    }
 }
 
 fn sprite_palette(palette_table: &[u8; 32], palette_index: u8) -> [u8; 4] {

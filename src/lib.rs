@@ -102,9 +102,9 @@ impl NES {
     pub fn clock(&mut self) {
         self.try_nmi();
 
-        self.cpu_clock();
+        let cycles = self.cpu_clock();
 
-        self.should_render = self.ppu_clock();
+        self.should_render = self.ppu_clock(cycles * 3);
 
         self.total_cycles += 1;
     }

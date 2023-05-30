@@ -3,14 +3,14 @@ use crate::{NmiStatus, ScreenMirroring, NES};
 pub mod registers;
 
 pub trait PPU {
-    fn ppu_clock(&mut self) -> bool;
+    fn ppu_clock(&mut self, cycles: usize) -> bool;
     fn ppu_read(&mut self) -> u8;
     fn ppu_write(&mut self, data: u8);
 }
 
 impl PPU for NES {
-    fn ppu_clock(&mut self) -> bool {
-        self.ppu_cycle += 1;
+    fn ppu_clock(&mut self, cycles: usize) -> bool {
+        self.ppu_cycle += cycles;
 
         if self.ppu_cycle >= 341 {
             self.ppu_cycle -= 341;

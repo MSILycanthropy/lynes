@@ -1,0 +1,7 @@
+/target
+/roms
+/palettes
+
+.envrc
+
+*.log

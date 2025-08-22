@@ -1,10 +1,13 @@
 use std::ops::{Add, Deref};
 
-use modular_bitfield::bitfield;
+use modular_bitfield::{bitfield, prelude::B5};
 
 pub struct PpuRegisters {
     pub address: Address,
     pub control: Control,
+    pub status: Status,
+    pub scroll: Scroll,
+    pub mask: Mask,
 }
 
 impl Default for PpuRegisters {
@@ -12,6 +15,9 @@ impl Default for PpuRegisters {
         Self {
             address: Address::default(),
             control: Control::new(),
+            status: Status::new(),
+            scroll: Scroll::default(),
+            mask: Mask::new(),
         }
     }
 }
@@ -140,4 +146,68 @@ impl Control {
         self.set_master_slave_select(bits >> 6 & 1 == 1);
         self.set_generate_nmi(bits >> 7 & 1 == 1);
     }
+}
+
+// 7  bit  0
+// ---- ----
+// VSOx xxxx
+// |||| ||||
+// |||+-++++- (PPU open bus or 2C05 PPU identifier)
+// ||+------- Sprite overflow flag
+// |+-------- Sprite 0 hit flag
+// +--------- Vblank flag, cleared on read.
+#[bitfield]
+pub struct Status {
+    unused: B5,
+    sprite_overflow: bool,
+    sprite_zero_hit: bool,
+    vblank_started: bool,
+}
+
+#[derive(Default)]
+pub struct Scroll {
+    pub scroll_x: u8,
+    pub scroll_y: u8,
+
+    pub latch: bool,
+}
+
+impl Scroll {
+    pub fn write(&mut self, data: u8) {
+        if self.latch {
+            self.scroll_y = data
+        } else {
+            self.scroll_x = data
+        }
+
+        self.latch = !self.latch
+    }
+
+    pub fn reset_latch(&mut self) {
+        self.latch = false
+    }
+}
+
+// 7  bit  0
+// ---- ----
+// BGRs bMmG
+// |||| ||||
+// |||| |||+- Greyscale (0: normal color, 1: greyscale)
+// |||| ||+-- 1: Show background in leftmost 8 pixels of screen, 0: Hide
+// |||| |+--- 1: Show sprites in leftmost 8 pixels of screen, 0: Hide
+// |||| +---- 1: Enable background rendering
+// |||+------ 1: Enable sprite rendering
+// ||+------- Emphasize red (green on PAL/Dendy)
+// |+-------- Emphasize green (red on PAL/Dendy)
+// +--------- Emphasize blue
+#[bitfield]
+pub struct Mask {
+    greyscale: bool,
+    leftmost_8px_background: bool,
+    leftmost_8px_sprite: bool,
+    show_background: bool,
+    show_sprite: bool,
+    emphasize_red: bool,
+    emphasize_green: bool,
+    emphasize_blue: bool,
 }

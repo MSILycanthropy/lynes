@@ -1,9 +1,14 @@
-use crate::NES;
+use crate::{cartridge::ScreenMirroring, NES};
+
+pub(crate) mod registers;
 
 pub trait PPU {
     fn ppu_clock(&mut self);
-    fn ppu_read(&mut self, addr: u16) -> u8;
-    fn ppu_write(&mut self, addr: u16, data: u8);
+    fn ppu_read_data(&mut self) -> u8;
+    fn ppu_write_to_address(&mut self, data: u8);
+    fn ppu_write_to_control(&mut self, data: u8);
+
+    fn mirror_vram_address(&self, address: u16) -> u16;
 }
 
 impl PPU for NES {
@@ -11,12 +16,44 @@ impl PPU for NES {
         println!("PPU clocked!");
     }
 
-    fn ppu_read(&mut self, addr: u16) -> u8 {
-        println!("PPU read from address: {:X}", addr);
-        0
+    fn ppu_read_data(&mut self) -> u8 {
+        let address = self.ppu_registers.address.as_u16();
+        self.ppu_registers.increment_vram_address();
+
+        match address {
+            0..=0x1FFF => todo!("Can't read from chr_rom yet"),
+            0x2000..=0x2FFF => todo!("Can't read from vram yet"),
+            0x3000..=0x3EFF => {
+                unreachable!(
+                    "0x3000..0x3EFF shouldnt be used, attempted to use {}",
+                    address
+                )
+            }
+            0x3F00..=0x3FFF => self.palette_table[(address - 0x3F00) as usize],
+            _ => unreachable!("attempted to access mirrored address space {}", address),
+        }
     }
 
-    fn ppu_write(&mut self, addr: u16, data: u8) {
-        println!("PPU write to address: {:X} with {:X}", addr, data);
+    fn ppu_write_to_address(&mut self, data: u8) {
+        self.ppu_registers.address.update(data);
+    }
+
+    fn ppu_write_to_control(&mut self, data: u8) {
+        self.ppu_registers.address.update(data);
+    }
+
+    fn mirror_vram_address(&self, address: u16) -> u16 {
+        let mirrored_vram = address & 0b10111111111111;
+        let vram_index = mirrored_vram - 0x2000;
+        let name_table = vram_index / 0x0400;
+
+        match (&self.mirroring, name_table) {
+            (ScreenMirroring::Vertical, 2) | (ScreenMirroring::Vertical, 3) => vram_index - 0x0800,
+            (ScreenMirroring::Horizontal, 2) | (ScreenMirroring::Horizontal, 1) => {
+                vram_index - 0x0400
+            }
+            (ScreenMirroring::Horizontal, 3) => vram_index - 0x0800,
+            _ => vram_index,
+        }
     }
 }

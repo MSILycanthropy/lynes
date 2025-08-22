@@ -5,7 +5,7 @@ pub struct CpuRegisters {
     pub x: u8,
     pub y: u8,
     pub stack_pointer: u8,
-    pub status: Status, // TODO: make this a struct with cool shit on it
+    pub status: Status,
     pub program_counter: u16,
 }
 

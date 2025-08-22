@@ -6,32 +6,40 @@ mod ppu;
 use cpu::{AddrMode, CPU};
 use ppu::PPU;
 
+use crate::cartridge::ScreenMirroring;
+
 pub struct NES {
+    // cpu
     cpu_ram: [u8; 2048],
-    ppu_vram: [u8; 2048],
-
     prg_rom: Vec<u8>,
-    chr_rom: Vec<u8>,
-
-    pub cpu_registers: cpu::registers::CpuRegisters,
-
     cpu_cycles: usize,
     clock_count: usize,
+    pub cpu_registers: cpu::registers::CpuRegisters,
+
+    // ppu
+    chr_rom: Vec<u8>,
+    palette_table: [u8; 32],
+    ppu_vram: [u8; 2048],
+    oam_data: [u8; 256],
+    mirroring: ScreenMirroring,
+    pub ppu_registers: ppu::registers::PpuRegisters,
 }
 
 impl Default for NES {
     fn default() -> Self {
         Self {
             cpu_ram: [0; 2048],
-            ppu_vram: [0; 2048],
-
             prg_rom: vec![],
-            chr_rom: vec![],
-
-            cpu_registers: cpu::registers::CpuRegisters::default(),
-
             cpu_cycles: 0,
             clock_count: 0,
+            cpu_registers: cpu::registers::CpuRegisters::default(),
+
+            chr_rom: vec![],
+            palette_table: [0; 32],
+            ppu_vram: [0; 2048],
+            oam_data: [0; 256],
+            mirroring: ScreenMirroring::Horizontal,
+            ppu_registers: ppu::registers::PpuRegisters::default(),
         }
     }
 }

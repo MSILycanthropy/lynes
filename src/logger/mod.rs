@@ -7,7 +7,7 @@ use crate::{
 
 const ILLEGAL_NOPS: [&'static str; 2] = ["DOP", "TOP"];
 
-pub fn log(nes: &NES) {
+pub fn log(nes: &mut NES) {
     println!(
         "{: <6}{: <10}{: <32}{}",
         program_counter_log(nes.cpu_registers.program_counter).blue(),
@@ -21,7 +21,7 @@ fn program_counter_log(program_counter: u16) -> String {
     format!("{:04X}", program_counter)
 }
 
-fn instruction_log(nes: &NES) -> String {
+fn instruction_log(nes: &mut NES) -> String {
     let opcode = nes.cpu_read(nes.cpu_registers.program_counter);
     let instruction = &cpu::instructions::INSTRUCTIONS_TABLE[opcode as usize];
 
@@ -46,7 +46,7 @@ fn instruction_log(nes: &NES) -> String {
     }
 }
 
-fn assembly_log(nes: &NES) -> String {
+fn assembly_log(nes: &mut NES) -> String {
     let opcode = nes.cpu_read(nes.cpu_registers.program_counter);
     let instruction = &cpu::instructions::INSTRUCTIONS_TABLE[opcode as usize];
 

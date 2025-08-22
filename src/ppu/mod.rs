@@ -4,9 +4,11 @@ pub(crate) mod registers;
 
 pub trait PPU {
     fn ppu_clock(&mut self);
-    fn ppu_read_data(&mut self) -> u8;
-    fn ppu_write_to_address(&mut self, data: u8);
-    fn ppu_write_to_control(&mut self, data: u8);
+    fn ppu_read(&mut self) -> u8;
+    fn ppu_write(&mut self, value: u8);
+
+    fn ppu_write_address(&mut self, data: u8);
+    fn ppu_write_control(&mut self, data: u8);
 
     fn mirror_vram_address(&self, address: u16) -> u16;
 }
@@ -16,7 +18,7 @@ impl PPU for NES {
         println!("PPU clocked!");
     }
 
-    fn ppu_read_data(&mut self) -> u8 {
+    fn ppu_read(&mut self) -> u8 {
         let address = self.ppu_registers.address.as_u16();
         self.ppu_registers.increment_vram_address();
 
@@ -34,11 +36,32 @@ impl PPU for NES {
         }
     }
 
-    fn ppu_write_to_address(&mut self, data: u8) {
+    fn ppu_write(&mut self, value: u8) {
+        let address = self.ppu_registers.address.as_u16();
+        match address {
+            0..=0x1fff => println!("attempt to write to chr rom space {}", address),
+            0x2000..=0x2fff => {
+                self.ppu_vram[self.mirror_vram_address(address) as usize] = value;
+            }
+            0x3000..=0x3eff => unimplemented!("address {} shouldn't be used in reallity", address),
+            0x3f10 | 0x3f14 | 0x3f18 | 0x3f1c => {
+                let add_mirror = address - 0x10;
+                self.palette_table[(add_mirror - 0x3f00) as usize] = value;
+            }
+            0x3f00..=0x3fff => {
+                self.palette_table[(address - 0x3f00) as usize] = value;
+            }
+            _ => panic!("unexpected access to mirrored space {}", address),
+        }
+
+        self.ppu_registers.increment_vram_address();
+    }
+
+    fn ppu_write_address(&mut self, data: u8) {
         self.ppu_registers.address.update(data);
     }
 
-    fn ppu_write_to_control(&mut self, data: u8) {
+    fn ppu_write_control(&mut self, data: u8) {
         self.ppu_registers.address.update(data);
     }
 

@@ -1,4 +1,4 @@
-use crate::NES;
+use crate::{ppu::PPU, NES};
 
 pub(crate) mod instructions;
 pub(crate) mod registers;
@@ -22,9 +22,9 @@ pub enum AddrMode {
 
 pub trait CPU {
     fn cpu_clock(&mut self);
-    fn cpu_read(&self, addr: u16) -> u8;
+    fn cpu_read(&mut self, addr: u16) -> u8;
     fn cpu_write(&mut self, addr: u16, data: u8);
-    fn cpu_read_u16(&self, addr: u16) -> u16 {
+    fn cpu_read_u16(&mut self, addr: u16) -> u16 {
         let low = self.cpu_read(addr);
         let high = self.cpu_read(addr + 1);
 
@@ -77,15 +77,20 @@ impl CPU for NES {
         self.cpu_cycles -= 1;
     }
 
-    fn cpu_read(&self, addr: u16) -> u8 {
+    fn cpu_read(&mut self, addr: u16) -> u8 {
         match addr {
             0x0000..=0x1FFF => {
                 let mirrored_addr = addr & 0b00000111_11111111;
 
                 self.cpu_ram[mirrored_addr as usize]
             }
-            0x2000..=0x3FFF => {
-                panic!("PPU registers are not implemented yet!")
+            0x2000 | 0x2001 | 0x2003 | 0x2005 | 0x2006 | 0x4014 => {
+                panic!("attempted to read from write-only PPU address {:x}", addr);
+            }
+            0x2007 => self.ppu_read(),
+            0x2008..=0x3FFF => {
+                let mirrored_down_address = addr & 0b00100000_00000111;
+                self.cpu_read(mirrored_down_address)
             }
             0x4000..=0x4017 => {
                 panic!("APU and I/O registers are not implemented yet!")
@@ -118,8 +123,12 @@ impl CPU for NES {
 
                 self.cpu_ram[mirrored_addr as usize] = data;
             }
-            0x2000..=0x3FFF => {
-                panic!("PPU registers are not implemented yet!")
+            0x2000 => self.ppu_write_control(data),
+            0x2006 => self.ppu_write_address(data),
+            0x2007 => self.ppu_write(data),
+            0x2008..=0x3FFF => {
+                let mirrored_down_address = addr & 0b00100000_00000111;
+                self.cpu_write(mirrored_down_address, data);
             }
             0x4000..=0x4017 => {
                 panic!("APU and I/O registers are not implemented yet!")

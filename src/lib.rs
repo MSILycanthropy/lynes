@@ -80,7 +80,7 @@ impl NES {
     }
 
     // Returns the address and if a page boundary was crossed
-    pub fn get_operating_address(&self, mode: &AddrMode) -> (u16, bool) {
+    pub fn get_operating_address(&mut self, mode: &AddrMode) -> (u16, bool) {
         match mode {
             AddrMode::Implied => panic!("Implied addressing mode has no operating address as it is implied"),
             AddrMode::Accumulator => panic!("Accumulator addressing mode has no operating address as it operates on the accumulator"),
@@ -92,7 +92,7 @@ impl NES {
         }
     }
 
-    pub fn get_absolute_address(&self, addr: u16, mode: &AddrMode) -> (u16, bool) {
+    pub fn get_absolute_address(&mut self, addr: u16, mode: &AddrMode) -> (u16, bool) {
         match mode {
             AddrMode::ZeroPage => {
                 let addr = self.cpu_read(addr) as u16;

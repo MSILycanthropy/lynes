@@ -4,26 +4,26 @@ use super::{AddrMode, CPU};
 
 macro_rules! instr {
     ($name: expr, $mode: expr, $cycles: expr, $len: expr, $fn: expr) => {
-        Instruction{
+        Instruction {
             name: $name,
             mode: $mode,
             cycles: $cycles,
             len: $len,
             operate: $fn,
-            legal: true
+            legal: true,
         }
     };
 }
 
 macro_rules! il_instr {
     ($name: expr, $mode: expr, $cycles: expr, $len: expr, $fn: expr) => {
-        Instruction{
+        Instruction {
             name: $name,
             mode: $mode,
             cycles: $cycles,
             len: $len,
             operate: $fn,
-            legal: false
+            legal: false,
         }
     };
 }
@@ -533,8 +533,9 @@ fn jsr(nes: &mut NES, mode: &AddrMode) -> usize {
 
 fn lda(nes: &mut NES, mode: &AddrMode) -> usize {
     let (addr, page_crossed) = nes.get_operating_address(mode);
+    let set = nes.cpu_read(addr);
 
-    set_accumulator(nes, nes.cpu_read(addr));
+    set_accumulator(nes, set);
 
     page_crossed.into()
 }
@@ -810,7 +811,9 @@ fn anc(nes: &mut NES, mode: &AddrMode) -> usize {
 
     set_accumulator(nes, result);
 
-    nes.cpu_registers.status.set_carry(nes.cpu_registers.status.negative());
+    nes.cpu_registers
+        .status
+        .set_carry(nes.cpu_registers.status.negative());
 
     0
 }
@@ -819,7 +822,8 @@ fn arr(nes: &mut NES, mode: &AddrMode) -> usize {
     let (addr, _) = nes.get_operating_address(mode);
     let value = nes.cpu_read(addr);
 
-    let result = ((nes.cpu_registers.accumulator & value) >> 1) | ((nes.cpu_registers.status.carry() as u8) << 7);
+    let result = ((nes.cpu_registers.accumulator & value) >> 1)
+        | ((nes.cpu_registers.status.carry() as u8) << 7);
 
     nes.cpu_registers.status.set_carry(value & 1 == 1);
 
@@ -830,7 +834,9 @@ fn arr(nes: &mut NES, mode: &AddrMode) -> usize {
     let sixth_bit = (accumulator >> 6) & 1;
 
     nes.cpu_registers.status.set_carry(sixth_bit == 1);
-    nes.cpu_registers.status.set_overflow(fifth_bit ^ sixth_bit == 1);
+    nes.cpu_registers
+        .status
+        .set_overflow(fifth_bit ^ sixth_bit == 1);
     update_zero_and_negative_flags(nes, accumulator);
 
     0
@@ -1057,12 +1063,16 @@ fn xas(nes: &mut NES, mode: &AddrMode) -> usize {
 }
 
 fn add_to_accumulator(nes: &mut NES, value: u8) {
-    let result: u16 = nes.cpu_registers.accumulator as u16 + value as u16 + Into::<u16>::into(nes.cpu_registers.status.carry());
+    let result: u16 = nes.cpu_registers.accumulator as u16
+        + value as u16
+        + Into::<u16>::into(nes.cpu_registers.status.carry());
     nes.cpu_registers.status.set_carry(result > 0xFF);
 
     let result = result as u8;
 
-    nes.cpu_registers.status.set_overflow((value ^ result) & (result ^ nes.cpu_registers.accumulator) & 0x80 != 0);
+    nes.cpu_registers
+        .status
+        .set_overflow((value ^ result) & (result ^ nes.cpu_registers.accumulator) & 0x80 != 0);
 
     set_accumulator(nes, result);
 }

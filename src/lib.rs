@@ -1,13 +1,18 @@
-mod cartridge;
-mod cpu;
-mod logger;
-mod ppu;
+pub mod cartridge;
+pub mod cpu;
+pub mod logger;
+pub mod ppu;
+pub mod renderer;
 
 use cpu::{AddrMode, CPU};
 use ppu::PPU;
 
-use crate::cartridge::ScreenMirroring;
+use crate::{
+    cartridge::ScreenMirroring,
+    renderer::{palette, Frame},
+};
 
+#[derive(PartialEq)]
 pub enum Interrupt {
     NMI,
     IRQ,
@@ -42,6 +47,8 @@ pub struct NES {
 
     // misc
     next_interrupt: Option<Interrupt>,
+
+    current_frame: Frame,
 }
 
 impl Default for NES {
@@ -63,12 +70,17 @@ impl Default for NES {
             ppu_registers: ppu::registers::PpuRegisters::default(),
 
             next_interrupt: None,
+
+            current_frame: Frame::new(),
         }
     }
 }
 
 impl NES {
-    pub fn start(&mut self, rom_file: &str) {
+    pub fn start<F>(&mut self, rom_file: &str, mut render_callback: F)
+    where
+        F: FnMut(&Frame),
+    {
         let cart = cartridge::Cartridge::load(rom_file);
         self.insert_cart(cart);
         self.reset();
@@ -76,16 +88,21 @@ impl NES {
 
         loop {
             if self.cpu_cycles == 0 {
-                logger::log(self);
+                // logger::log(self);
             }
 
             let cycles = self.cpu_clock();
 
             if cycles > 0 {
-                self.ppu_clock(cycles)
-            }
+                let new_frame = self.ppu_clock(cycles);
 
-            self.try_interrupt();
+                self.try_interrupt();
+
+                if new_frame {
+                    self.render();
+                    render_callback(&self.current_frame)
+                }
+            }
         }
     }
 
@@ -202,6 +219,8 @@ impl NES {
         }
 
         self.perform_interrupt();
+
+        self.next_interrupt = None;
     }
 
     fn perform_interrupt(&mut self) {
@@ -216,7 +235,48 @@ impl NES {
         self.clock_count += 2;
         self.ppu_clock(2);
 
-        self.cpu_registers.program_counter = self.cpu_read_u16(0xFFFA);
+        let interrupt = self.next_interrupt.as_ref().unwrap();
+
+        self.cpu_registers.program_counter = self.cpu_read_u16(interrupt.address());
+    }
+
+    fn render(&mut self) {
+        let bank = self
+            .ppu_registers
+            .control
+            .background_pattern_address_value();
+
+        for i in 0..0x3C0 {
+            let tile = self.ppu_vram[i] as u16;
+            let tile_x = i % 32;
+            let tile_y = i / 32;
+
+            let tile =
+                &self.chr_rom[(bank + tile * 16) as usize..=(bank + tile * 16 + 15) as usize];
+
+            for y in 0..=7 {
+                let mut high = tile[y];
+                let mut low = tile[y + 8];
+
+                for x in (0..=7).rev() {
+                    let value = (1 & high) << 1 | 1 & low;
+
+                    high = high >> 1;
+                    low = low >> 1;
+
+                    let color = match value {
+                        0 => palette::SYSTEM_PALLETE[0x01],
+                        1 => palette::SYSTEM_PALLETE[0x23],
+                        2 => palette::SYSTEM_PALLETE[0x27],
+                        3 => palette::SYSTEM_PALLETE[0x30],
+                        _ => panic!("can't be"),
+                    };
+
+                    self.current_frame
+                        .set_pixel(tile_x * 8 + x, tile_y * 8 + y, color);
+                }
+            }
+        }
     }
 }
 

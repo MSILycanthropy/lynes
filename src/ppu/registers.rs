@@ -1,5 +1,3 @@
-use std::ops::{Add, Deref};
-
 use modular_bitfield::{bitfield, prelude::B5};
 
 pub struct PpuRegisters {
@@ -8,6 +6,8 @@ pub struct PpuRegisters {
     pub status: Status,
     pub scroll: Scroll,
     pub mask: Mask,
+
+    pub oam_addr: u8,
 }
 
 impl Default for PpuRegisters {
@@ -18,6 +18,8 @@ impl Default for PpuRegisters {
             status: Status::new(),
             scroll: Scroll::default(),
             mask: Mask::new(),
+
+            oam_addr: 0,
         }
     }
 }
@@ -117,7 +119,7 @@ pub struct Control {
     pub nametable2: bool,
     pub vram_address_increment: bool,
     pub sprite_pattern_address: bool,
-    pub background_attern_address: bool,
+    pub background_pattern_address: bool,
     pub sprite_size: bool,
     pub master_slave_select: bool,
     pub generate_nmi: bool,
@@ -136,12 +138,20 @@ impl Control {
         }
     }
 
-    pub fn set_bits(&mut self, bits: u8) {
+    pub fn background_pattern_address_value(&self) -> u16 {
+        if self.background_pattern_address() {
+            0x1000
+        } else {
+            0x0000
+        }
+    }
+
+    pub fn update(&mut self, bits: u8) {
         self.set_nametable1(bits >> 0 & 1 == 1);
         self.set_nametable2(bits >> 1 & 1 == 1);
         self.set_vram_address_increment(bits >> 2 & 1 == 1);
         self.set_sprite_pattern_address(bits >> 3 & 1 == 1);
-        self.set_background_attern_address(bits >> 4 & 1 == 1);
+        self.set_background_pattern_address(bits >> 4 & 1 == 1);
         self.set_sprite_pattern_address(bits >> 5 & 1 == 1);
         self.set_master_slave_select(bits >> 6 & 1 == 1);
         self.set_generate_nmi(bits >> 7 & 1 == 1);
@@ -157,6 +167,7 @@ impl Control {
 // |+-------- Sprite 0 hit flag
 // +--------- Vblank flag, cleared on read.
 #[bitfield]
+#[derive(Clone)]
 pub struct Status {
     #[allow(dead_code)]
     unused: B5,
@@ -174,7 +185,7 @@ pub struct Scroll {
 }
 
 impl Scroll {
-    pub fn write(&mut self, data: u8) {
+    pub fn update(&mut self, data: u8) {
         if self.latch {
             self.scroll_y = data
         } else {
@@ -203,12 +214,25 @@ impl Scroll {
 // +--------- Emphasize blue
 #[bitfield]
 pub struct Mask {
-    greyscale: bool,
-    leftmost_8px_background: bool,
-    leftmost_8px_sprite: bool,
-    show_background: bool,
-    show_sprite: bool,
-    emphasize_red: bool,
-    emphasize_green: bool,
-    emphasize_blue: bool,
+    pub greyscale: bool,
+    pub leftmost_8px_background: bool,
+    pub leftmost_8px_sprite: bool,
+    pub show_background: bool,
+    pub show_sprite: bool,
+    pub emphasize_red: bool,
+    pub emphasize_green: bool,
+    pub emphasize_blue: bool,
+}
+
+impl Mask {
+    pub fn update(&mut self, bits: u8) {
+        self.set_greyscale(bits >> 0 & 1 == 1);
+        self.set_leftmost_8px_background(bits >> 1 & 1 == 1);
+        self.set_leftmost_8px_sprite(bits >> 2 & 1 == 1);
+        self.set_show_background(bits >> 3 & 1 == 1);
+        self.set_show_sprite(bits >> 4 & 1 == 1);
+        self.set_emphasize_red(bits >> 5 & 1 == 1);
+        self.set_emphasize_green(bits >> 6 & 1 == 1);
+        self.set_emphasize_blue(bits >> 7 & 1 == 1);
+    }
 }

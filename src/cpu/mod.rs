@@ -86,21 +86,19 @@ impl CPU for NES {
                 self.cpu_ram[mirrored_addr as usize]
             }
             0x2000 | 0x2001 | 0x2003 | 0x2005 | 0x2006 | 0x4014 => {
-                panic!("attempted to read from write-only PPU address {:x}", addr);
+                // panic!("attempted to read from write-only PPU address {:x}", addr);
+                0
             }
+            0x2002 => self.ppu_read_status(),
+            0x2004 => self.ppu_read_oam_data(),
             0x2007 => self.ppu_read(),
+            0x4000..=0x4017 => {
+                // panic!("APU and I/O registers are not implemented yet!")
+                0
+            }
             0x2008..=0x3FFF => {
                 let mirrored_down_address = addr & 0b00100000_00000111;
                 self.cpu_read(mirrored_down_address)
-            }
-            0x4000..=0x4017 => {
-                panic!("APU and I/O registers are not implemented yet!")
-            }
-            0x4018..=0x401F => {
-                panic!("APU and I/O functionality that is normally disabled")
-            }
-            0x4020..=0x7999 => {
-                panic!("PRG RAM and mapper registers")
             }
             0x8000..=0xFFFF => {
                 let mut addr = addr - 0x8000;
@@ -125,6 +123,11 @@ impl CPU for NES {
                 self.cpu_ram[mirrored_addr as usize] = data;
             }
             0x2000 => self.ppu_write_control(data),
+            0x2001 => self.ppu_write_mask(data),
+            0x2002 => panic!("attempt to write to ppu status register.. dont do that"),
+            0x2003 => self.ppu_write_oam_address(data),
+            0x2004 => self.ppu_write_oam_data(data),
+            0x2005 => self.ppu_write_scroll(data),
             0x2006 => self.ppu_write_address(data),
             0x2007 => self.ppu_write(data),
             0x2008..=0x3FFF => {
@@ -132,16 +135,16 @@ impl CPU for NES {
                 self.cpu_write(mirrored_down_address, data);
             }
             0x4000..=0x4017 => {
-                panic!("APU and I/O registers are not implemented yet!")
+                // panic!("APU and I/O registers are not implemented yet!")
             }
             0x4018..=0x401F => {
-                panic!("APU and I/O functionality that is normally disabled")
+                // panic!("APU and I/O functionality that is normally disabled")
             }
             0x4020..=0x7999 => {
-                panic!("PRG RAM and mapper registers")
+                // panic!("PRG RAM and mapper registers")
             }
             0x8000..=0xFFFF => {
-                panic!("Cannot write to PRG ROM!")
+                // panic!("Cannot write to PRG ROM!")
             }
             _ => {
                 panic!("Invalid CPU write address: {:#06X}", addr);

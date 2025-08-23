@@ -21,7 +21,7 @@ pub enum AddrMode {
 }
 
 pub trait CPU {
-    fn cpu_clock(&mut self);
+    fn cpu_clock(&mut self) -> usize;
     fn cpu_read(&mut self, addr: u16) -> u8;
     fn cpu_write(&mut self, addr: u16, data: u8);
     fn cpu_read_u16(&mut self, addr: u16) -> u16 {
@@ -54,7 +54,7 @@ pub trait CPU {
 }
 
 impl CPU for NES {
-    fn cpu_clock(&mut self) {
+    fn cpu_clock(&mut self) -> usize {
         if self.cpu_cycles == 0 {
             let opcode = self.cpu_read(self.cpu_registers.program_counter);
 
@@ -71,10 +71,11 @@ impl CPU for NES {
             self.cpu_cycles += cycles;
             self.clock_count += cycles;
 
-            return;
+            return cycles;
         }
 
         self.cpu_cycles -= 1;
+        return 0;
     }
 
     fn cpu_read(&mut self, addr: u16) -> u8 {

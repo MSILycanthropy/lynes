@@ -8,6 +8,20 @@ use ppu::PPU;
 
 use crate::cartridge::ScreenMirroring;
 
+pub enum Interrupt {
+    NMI,
+    IRQ,
+}
+
+impl Interrupt {
+    fn address(&self) -> u16 {
+        match self {
+            Interrupt::NMI => 0xFFFA,
+            Interrupt::IRQ => 0xFFFB,
+        }
+    }
+}
+
 pub struct NES {
     // cpu
     cpu_ram: [u8; 2048],
@@ -22,7 +36,12 @@ pub struct NES {
     ppu_vram: [u8; 2048],
     oam_data: [u8; 256],
     mirroring: ScreenMirroring,
+    ppu_cycles: usize,
+    ppu_scanline: usize,
     pub ppu_registers: ppu::registers::PpuRegisters,
+
+    // misc
+    next_interrupt: Option<Interrupt>,
 }
 
 impl Default for NES {
@@ -39,7 +58,11 @@ impl Default for NES {
             ppu_vram: [0; 2048],
             oam_data: [0; 256],
             mirroring: ScreenMirroring::Horizontal,
+            ppu_cycles: 0,
+            ppu_scanline: 0,
             ppu_registers: ppu::registers::PpuRegisters::default(),
+
+            next_interrupt: None,
         }
     }
 }
@@ -56,7 +79,13 @@ impl NES {
                 logger::log(self);
             }
 
-            self.cpu_clock();
+            let cycles = self.cpu_clock();
+
+            if cycles > 0 {
+                self.ppu_clock(cycles)
+            }
+
+            self.try_interrupt();
         }
     }
 
@@ -67,11 +96,11 @@ impl NES {
         self.cpu_registers.stack_pointer = 0xFD;
 
         self.cpu_registers.status.set_bits(0b0010_0100);
-
         self.cpu_registers.program_counter = self.cpu_read_u16(0xFFFC);
 
         self.cpu_cycles = 7;
         self.clock_count = 7;
+        self.ppu_cycles = 21;
     }
 
     pub fn insert_cart(&mut self, cart: cartridge::Cartridge) {
@@ -165,6 +194,29 @@ impl NES {
             }
             _ => panic!("Invalid absolute addressing mode"),
         }
+    }
+
+    fn try_interrupt(&mut self) {
+        if let None = self.next_interrupt {
+            return;
+        }
+
+        self.perform_interrupt();
+    }
+
+    fn perform_interrupt(&mut self) {
+        self.stack_push_u16(self.cpu_registers.program_counter);
+        let mut flag = self.cpu_registers.status.clone();
+        flag.set_b(0b01);
+
+        self.stack_push(*flag.into_bytes().first().unwrap());
+        self.cpu_registers.status.set_interrupt_disable(true);
+
+        self.cpu_cycles += 2;
+        self.clock_count += 2;
+        self.ppu_clock(2);
+
+        self.cpu_registers.program_counter = self.cpu_read_u16(0xFFFA);
     }
 }
 

@@ -158,10 +158,11 @@ impl Control {
 // +--------- Vblank flag, cleared on read.
 #[bitfield]
 pub struct Status {
+    #[allow(dead_code)]
     unused: B5,
-    sprite_overflow: bool,
-    sprite_zero_hit: bool,
-    vblank_started: bool,
+    pub sprite_overflow: bool,
+    pub sprite_zero_hit: bool,
+    pub vblank_started: bool,
 }
 
 #[derive(Default)]

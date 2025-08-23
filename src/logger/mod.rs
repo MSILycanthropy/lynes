@@ -155,12 +155,14 @@ fn assembly_log(nes: &mut NES) -> String {
 
 fn cpu_registers_log(nes: &NES) -> String {
     format!(
-        "A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{}",
+        "A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:{:>3},{:>3} CYC:{}",
         nes.cpu_registers.accumulator,
         nes.cpu_registers.x,
         nes.cpu_registers.y,
         nes.cpu_registers.status.bits(),
         nes.cpu_registers.stack_pointer,
+        nes.ppu_scanline,
+        nes.ppu_cycles,
         nes.clock_count,
     )
 }

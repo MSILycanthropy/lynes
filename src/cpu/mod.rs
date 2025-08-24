@@ -92,10 +92,12 @@ impl CPU for NES {
             0x2002 => self.ppu_read_status(),
             0x2004 => self.ppu_read_oam_data(),
             0x2007 => self.ppu_read(),
-            0x4000..=0x4017 => {
+            0x4000..=0x4015 => {
                 // panic!("APU and I/O registers are not implemented yet!")
                 0
             }
+            0x4016 => self.controller.read(),
+            0x4017 => 0,
             0x2008..=0x3FFF => {
                 let mirrored_down_address = addr & 0b00100000_00000111;
                 self.cpu_read(mirrored_down_address)
@@ -144,8 +146,12 @@ impl CPU for NES {
 
                 self.ppu_write_oam_dma(&buffer)
             }
-            0x4000..=0x4017 => {
+            0x4000..=0x4015 => {
                 // panic!("APU and I/O registers are not implemented yet!")
+            }
+            0x4016 => self.controller.write(data),
+            0x4017 => {
+                // ignore controller 2
             }
             0x4018..=0x401F => {
                 // panic!("APU and I/O functionality that is normally disabled")

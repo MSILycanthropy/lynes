@@ -75,6 +75,10 @@ impl PPU for NES {
                     address
                 )
             }
+            0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C => {
+                let add_mirror = address - 0x10;
+                self.palette_table[(add_mirror - 0x3f00) as usize]
+            }
             0x3F00..=0x3FFF => self.palette_table[(address - 0x3F00) as usize],
             _ => unreachable!("attempted to access mirrored address space {}", address),
         }

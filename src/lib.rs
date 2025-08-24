@@ -1,5 +1,6 @@
 pub mod cartridge;
 pub mod cpu;
+pub mod input;
 pub mod logger;
 pub mod ppu;
 pub mod renderer;
@@ -9,6 +10,7 @@ use ppu::PPU;
 
 use crate::{
     cartridge::ScreenMirroring,
+    input::Controller,
     renderer::{palette, Frame},
 };
 
@@ -50,6 +52,7 @@ pub struct NES {
     next_interrupt: Option<Interrupt>,
 
     current_frame: Frame,
+    controller: Controller,
 }
 
 impl Default for NES {
@@ -74,6 +77,7 @@ impl Default for NES {
             next_interrupt: None,
 
             current_frame: Frame::new(),
+            controller: Controller::new(),
         }
     }
 }
@@ -81,7 +85,7 @@ impl Default for NES {
 impl NES {
     pub fn start<F>(&mut self, rom_file: &str, mut render_callback: F)
     where
-        F: FnMut(&Frame),
+        F: FnMut(&Frame, &mut Controller),
     {
         let cart = cartridge::Cartridge::load(rom_file);
         self.insert_cart(cart);
@@ -102,7 +106,7 @@ impl NES {
 
                 if new_frame {
                     self.render();
-                    render_callback(&self.current_frame)
+                    render_callback(&self.current_frame, &mut self.controller)
                 }
             }
         }

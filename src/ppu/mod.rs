@@ -11,6 +11,7 @@ pub trait PPU {
     fn ppu_write_control(&mut self, data: u8);
     fn ppu_write_oam_address(&mut self, data: u8);
     fn ppu_write_oam_data(&mut self, data: u8);
+    fn ppu_write_oam_dma(&mut self, buffer: &[u8; 256]);
     fn ppu_write_mask(&mut self, data: u8);
     fn ppu_write_scroll(&mut self, data: u8);
 
@@ -18,6 +19,7 @@ pub trait PPU {
     fn ppu_read_oam_data(&mut self) -> u8;
 
     fn background_palette(&self, tile_x: usize, tile_y: usize) -> [u8; 4];
+    fn sprite_palette(&self, index: usize) -> [u8; 4];
     fn mirror_vram_address(&self, address: u16) -> u16;
 }
 
@@ -132,6 +134,12 @@ impl PPU for NES {
         self.ppu_registers.oam_addr = self.ppu_registers.oam_addr.wrapping_add(1);
     }
 
+    fn ppu_write_oam_dma(&mut self, buffer: &[u8; 256]) {
+        for data in buffer.iter() {
+            self.ppu_write_oam_data(*data);
+        }
+    }
+
     fn ppu_read_status(&mut self) -> u8 {
         let status = self.ppu_registers.status.clone();
         let data = *status.into_bytes().first().unwrap();
@@ -162,6 +170,18 @@ impl PPU for NES {
 
         [
             self.palette_table[0],
+            self.palette_table[palette_start],
+            self.palette_table[palette_start + 1],
+            self.palette_table[palette_start + 2],
+        ]
+    }
+
+    fn sprite_palette(&self, index: usize) -> [u8; 4] {
+        let palette_index = self.oam_data[index + 2] & 0b11;
+        let palette_start = 0x11 + (palette_index * 4) as usize;
+
+        [
+            0,
             self.palette_table[palette_start],
             self.palette_table[palette_start + 1],
             self.palette_table[palette_start + 2],

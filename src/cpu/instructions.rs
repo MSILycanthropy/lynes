@@ -383,7 +383,7 @@ fn bpl(nes: &mut NES, _mode: &AddrMode) -> usize {
     branch(nes, !nes.cpu_registers.status.negative())
 }
 
-fn brk(nes: &mut NES, _mode: &AddrMode) -> usize {
+fn brk(_nes: &mut NES, _mode: &AddrMode) -> usize {
     // TODO: interrupts
     // std::process::exit(0);
     0

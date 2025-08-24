@@ -243,6 +243,11 @@ impl NES {
     }
 
     fn render(&mut self) {
+        self.render_background();
+        self.render_sprites();
+    }
+
+    fn render_background(&mut self) {
         let bank = self
             .ppu_registers
             .control
@@ -271,6 +276,60 @@ impl NES {
 
                     self.current_frame
                         .set_pixel(tile_x * 8 + x, tile_y * 8 + y, color);
+                }
+            }
+        }
+    }
+
+    fn render_sprites(&mut self) {
+        for i in (0..self.oam_data.len()).step_by(4).rev() {
+            let tile = self.oam_data[i + 1] as u16;
+            let tile_x = self.oam_data[i + 3] as usize;
+            let tile_y = self.oam_data[i] as usize;
+
+            let flip_vertical = self.oam_data[i + 2] >> 7 & 1 == 1;
+            let flip_horizontal = self.oam_data[i + 2] >> 6 & 1 == 1;
+
+            let palette = self.sprite_palette(i);
+
+            let bank = self.ppu_registers.control.sprite_pattern_address_value();
+
+            let tile =
+                &self.chr_rom[(bank + tile * 16) as usize..=(bank + tile * 16 + 15) as usize];
+
+            for y in 0..=7 {
+                let mut high = tile[y];
+                let mut low = tile[y + 8];
+
+                'inner: for x in (0..=7).rev() {
+                    let value = (1 & low) << 1 | 1 & high;
+
+                    high = high >> 1;
+                    low = low >> 1;
+
+                    if value == 0 {
+                        continue 'inner;
+                    }
+
+                    let color = palette::SYSTEM_PALLETE[palette[value as usize] as usize];
+
+                    match (flip_horizontal, flip_vertical) {
+                        (false, false) => {
+                            self.current_frame.set_pixel(tile_x + x, tile_y + y, color)
+                        }
+                        (true, false) => {
+                            self.current_frame
+                                .set_pixel(tile_x + 7 - x, tile_y + y, color)
+                        }
+                        (false, true) => {
+                            self.current_frame
+                                .set_pixel(tile_x + x, tile_y + 7 - y, color)
+                        }
+                        (true, true) => {
+                            self.current_frame
+                                .set_pixel(tile_x + 7 - x, tile_y + 7 - y, color)
+                        }
+                    }
                 }
             }
         }

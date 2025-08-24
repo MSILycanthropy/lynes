@@ -146,6 +146,14 @@ impl Control {
         }
     }
 
+    pub fn sprite_pattern_address_value(&self) -> u16 {
+        if self.sprite_pattern_address() {
+            0x0000
+        } else {
+            0x1000
+        }
+    }
+
     pub fn update(&mut self, bits: u8) {
         self.set_nametable1(bits >> 0 & 1 == 1);
         self.set_nametable2(bits >> 1 & 1 == 1);

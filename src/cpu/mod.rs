@@ -134,6 +134,16 @@ impl CPU for NES {
                 let mirrored_down_address = addr & 0b00100000_00000111;
                 self.cpu_write(mirrored_down_address, data);
             }
+            0x4014 => {
+                let mut buffer = [0u8; 256];
+                let high = (data as u16) << 8;
+
+                for i in 0..256u16 {
+                    buffer[i as usize] = self.cpu_read(high + i);
+                }
+
+                self.ppu_write_oam_dma(&buffer)
+            }
             0x4000..=0x4017 => {
                 // panic!("APU and I/O registers are not implemented yet!")
             }
@@ -144,7 +154,7 @@ impl CPU for NES {
                 // panic!("PRG RAM and mapper registers")
             }
             0x8000..=0xFFFF => {
-                // panic!("Cannot write to PRG ROM!")
+                panic!("Cannot write to PRG ROM!")
             }
             _ => {
                 panic!("Invalid CPU write address: {:#06X}", addr);

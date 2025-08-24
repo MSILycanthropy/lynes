@@ -18,9 +18,11 @@ pub trait PPU {
     fn ppu_read_status(&mut self) -> u8;
     fn ppu_read_oam_data(&mut self) -> u8;
 
-    fn background_palette(&self, tile_x: usize, tile_y: usize) -> [u8; 4];
+    fn background_palette(&self, attribute_table: &[u8], tile_x: usize, tile_y: usize) -> [u8; 4];
     fn sprite_palette(&self, index: usize) -> [u8; 4];
     fn mirror_vram_address(&self, address: u16) -> u16;
+
+    fn is_sprite_0_hit(&self, cycle: usize) -> bool;
 }
 
 impl PPU for NES {
@@ -28,6 +30,10 @@ impl PPU for NES {
         self.ppu_cycles += cycles * 3;
 
         if self.ppu_cycles >= 341 {
+            if self.is_sprite_0_hit(self.ppu_cycles) {
+                self.ppu_registers.status.set_sprite_zero_hit(true);
+            }
+
             self.ppu_cycles = self.ppu_cycles - 341;
             self.ppu_scanline += 1;
 
@@ -159,9 +165,9 @@ impl PPU for NES {
         self.oam_data[self.ppu_registers.oam_addr as usize]
     }
 
-    fn background_palette(&self, tile_x: usize, tile_y: usize) -> [u8; 4] {
+    fn background_palette(&self, attribute_table: &[u8], tile_x: usize, tile_y: usize) -> [u8; 4] {
         let attribute_table_index = tile_y / 4 * 8 + tile_x / 4;
-        let attibute_table_value = self.ppu_vram[0x3c0 + attribute_table_index];
+        let attibute_table_value = attribute_table[attribute_table_index];
 
         let palette_table_index = match (tile_x % 4 / 2, tile_y % 4 / 2) {
             (0, 0) => (attibute_table_value >> 0) & 0b11,
@@ -204,5 +210,12 @@ impl PPU for NES {
             (ScreenMirroring::Horizontal, 3) => vram_index - 0x800,
             _ => vram_index,
         }
+    }
+
+    fn is_sprite_0_hit(&self, cycle: usize) -> bool {
+        let y = self.oam_data[0] as usize;
+        let x = self.oam_data[3] as usize;
+
+        (y == self.ppu_scanline as usize) && x <= cycle && self.ppu_registers.mask.show_sprite()
     }
 }

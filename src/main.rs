@@ -21,7 +21,7 @@ fn main() {
 
     let mut nes = NES::default();
 
-    nes.start("roms/pacman.nes", move |frame, controller| {
+    nes.start("roms/mario.nes", move |frame, controller| {
         let frame_start = Instant::now();
 
         texture.update(None, frame.data(), 256 * 3).unwrap();

@@ -7,11 +7,12 @@ pub mod renderer;
 
 use cpu::{AddrMode, CPU};
 use ppu::PPU;
+use sdl2::sys::Screen;
 
 use crate::{
     cartridge::ScreenMirroring,
     input::Controller,
-    renderer::{palette, Frame},
+    renderer::{palette, Frame, ViewPortRect},
 };
 
 #[derive(PartialEq)]
@@ -252,19 +253,76 @@ impl NES {
     }
 
     fn render_background(&mut self) {
+        let scroll_x = self.ppu_registers.scroll.scroll_x as usize;
+        let scroll_y = self.ppu_registers.scroll.scroll_y as usize;
+
+        let (first_nametable, second_nametable) = match (
+            self.mirroring.clone(),
+            self.ppu_registers.control.name_table_address(),
+        ) {
+            (ScreenMirroring::Vertical, 0x2000)
+            | (ScreenMirroring::Vertical, 0x2800)
+            | (ScreenMirroring::Horizontal, 0x2000)
+            | (ScreenMirroring::Horizontal, 0x2400) => (
+                &self.ppu_vram.clone()[0..0x400],
+                &self.ppu_vram.clone()[0x400..0x800],
+            ),
+            (ScreenMirroring::Vertical, 0x2400)
+            | (ScreenMirroring::Vertical, 0x2C00)
+            | (ScreenMirroring::Horizontal, 0x2800)
+            | (ScreenMirroring::Horizontal, 0x2C00) => (
+                &self.ppu_vram.clone()[0x400..0x800],
+                &self.ppu_vram.clone()[0..0x400],
+            ),
+            (_, _) => {
+                panic!("Not supported mirroring type {:?}", self.mirroring);
+            }
+        };
+
+        self.render_name_table(
+            first_nametable,
+            ViewPortRect::new(scroll_x, scroll_y, 256, 240),
+            -(scroll_x as isize),
+            -(scroll_y as isize),
+        );
+
+        if scroll_x > 0 {
+            self.render_name_table(
+                second_nametable,
+                ViewPortRect::new(0, 0, scroll_x, 240),
+                (256 - scroll_x) as isize,
+                0,
+            );
+        } else if scroll_y > 0 {
+            self.render_name_table(
+                second_nametable,
+                ViewPortRect::new(0, 0, 256, scroll_y),
+                0,
+                (240 - scroll_y) as isize,
+            );
+        }
+    }
+
+    fn render_name_table(
+        &mut self,
+        name_table: &[u8],
+        view_port: ViewPortRect,
+        shift_x: isize,
+        shift_y: isize,
+    ) {
         let bank = self
             .ppu_registers
             .control
             .background_pattern_address_value();
+        let attribute_table = &name_table[0x3C0..0x400];
 
         for i in 0..0x3C0 {
-            let tile = self.ppu_vram[i] as u16;
             let tile_x = i % 32;
             let tile_y = i / 32;
-            let palette = self.background_palette(tile_x, tile_y);
-
+            let tile = name_table[i] as u16;
             let tile =
                 &self.chr_rom[(bank + tile * 16) as usize..=(bank + tile * 16 + 15) as usize];
+            let palette = self.background_palette(attribute_table, tile_x, tile_y);
 
             for y in 0..=7 {
                 let mut high = tile[y];
@@ -278,8 +336,16 @@ impl NES {
 
                     let color = palette::SYSTEM_PALLETE[palette[value as usize] as usize];
 
-                    self.current_frame
-                        .set_pixel(tile_x * 8 + x, tile_y * 8 + y, color);
+                    let pixel_x = tile_x * 8 + x;
+                    let pixel_y = tile_y * 8 + y;
+
+                    if view_port.point_is_bounded(pixel_x, pixel_y) {
+                        self.current_frame.set_pixel(
+                            (shift_x + pixel_x as isize) as usize,
+                            (shift_y + pixel_y as isize) as usize,
+                            color,
+                        );
+                    }
                 }
             }
         }

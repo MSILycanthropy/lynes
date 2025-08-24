@@ -1,4 +1,7 @@
-use modular_bitfield::{bitfield, prelude::B5};
+use modular_bitfield::{
+    bitfield,
+    prelude::{B2, B5},
+};
 
 pub struct PpuRegisters {
     pub address: Address,
@@ -115,8 +118,7 @@ impl Address {
 #[bitfield]
 #[derive(Clone)]
 pub struct Control {
-    pub nametable1: bool,
-    pub nametable2: bool,
+    pub nametable: B2,
     pub vram_address_increment: bool,
     pub sprite_pattern_address: bool,
     pub background_pattern_address: bool,
@@ -128,6 +130,16 @@ pub struct Control {
 impl Control {
     pub fn bits(&self) -> u8 {
         self.clone().into_bytes()[0]
+    }
+
+    pub fn name_table_address(&self) -> u16 {
+        match self.nametable() {
+            0 => 0x2000,
+            1 => 0x2400,
+            2 => 0x2800,
+            3 => 0x2C00,
+            _ => unreachable!(),
+        }
     }
 
     pub fn vram_address_increment_amount(&self) -> u8 {
@@ -148,21 +160,14 @@ impl Control {
 
     pub fn sprite_pattern_address_value(&self) -> u16 {
         if self.sprite_pattern_address() {
-            0x0000
-        } else {
             0x1000
+        } else {
+            0x0000
         }
     }
 
     pub fn update(&mut self, bits: u8) {
-        self.set_nametable1(bits >> 0 & 1 == 1);
-        self.set_nametable2(bits >> 1 & 1 == 1);
-        self.set_vram_address_increment(bits >> 2 & 1 == 1);
-        self.set_sprite_pattern_address(bits >> 3 & 1 == 1);
-        self.set_background_pattern_address(bits >> 4 & 1 == 1);
-        self.set_sprite_pattern_address(bits >> 5 & 1 == 1);
-        self.set_master_slave_select(bits >> 6 & 1 == 1);
-        self.set_generate_nmi(bits >> 7 & 1 == 1);
+        self.bytes = [bits];
     }
 }
 
@@ -234,13 +239,6 @@ pub struct Mask {
 
 impl Mask {
     pub fn update(&mut self, bits: u8) {
-        self.set_greyscale(bits >> 0 & 1 == 1);
-        self.set_leftmost_8px_background(bits >> 1 & 1 == 1);
-        self.set_leftmost_8px_sprite(bits >> 2 & 1 == 1);
-        self.set_show_background(bits >> 3 & 1 == 1);
-        self.set_show_sprite(bits >> 4 & 1 == 1);
-        self.set_emphasize_red(bits >> 5 & 1 == 1);
-        self.set_emphasize_green(bits >> 6 & 1 == 1);
-        self.set_emphasize_blue(bits >> 7 & 1 == 1);
+        self.bytes = [bits];
     }
 }

@@ -53,12 +53,6 @@ impl Status {
     }
 
     pub fn set_bits(&mut self, bits: u8) {
-        self.set_carry(bits >> 0 & 1 == 1);
-        self.set_zero(bits >> 1 & 1 == 1);
-        self.set_interrupt_disable(bits >> 2 & 1 == 1);
-        self.set_decimal(bits >> 3 & 1 == 1);
-        self.set_b(bits >> 4 & 0b11);
-        self.set_overflow(bits >> 6 & 1 == 1);
-        self.set_negative(bits >> 7 & 1 == 1);
+        self.bytes = [bits];
     }
 }

@@ -17,6 +17,7 @@ pub trait PPU {
     fn ppu_read_status(&mut self) -> u8;
     fn ppu_read_oam_data(&mut self) -> u8;
 
+    fn background_palette(&self, tile_x: usize, tile_y: usize) -> [u8; 4];
     fn mirror_vram_address(&self, address: u16) -> u16;
 }
 
@@ -52,11 +53,20 @@ impl PPU for NES {
 
     fn ppu_read(&mut self) -> u8 {
         let address = self.ppu_registers.address.as_u16();
+
         self.ppu_registers.increment_vram_address();
 
         match address {
-            0..=0x1FFF => self.chr_rom[address as usize],
-            0x2000..=0x2FFF => self.ppu_vram[self.mirror_vram_address(address) as usize],
+            0..=0x1FFF => {
+                let result = self.ppu_read_buffer;
+                self.ppu_read_buffer = self.chr_rom[address as usize];
+                result
+            }
+            0x2000..=0x2FFF => {
+                let result = self.ppu_read_buffer;
+                self.ppu_read_buffer = self.ppu_vram[self.mirror_vram_address(address) as usize];
+                result
+            }
             0x3000..=0x3EFF => {
                 unreachable!(
                     "0x3000..0x3EFF shouldnt be used, attempted to use {}",
@@ -135,6 +145,27 @@ impl PPU for NES {
 
     fn ppu_read_oam_data(&mut self) -> u8 {
         self.oam_data[self.ppu_registers.oam_addr as usize]
+    }
+
+    fn background_palette(&self, tile_x: usize, tile_y: usize) -> [u8; 4] {
+        let attribute_table_index = tile_y / 4 * 8 + tile_x / 4;
+        let attibute_table_value = self.ppu_vram[0x3c0 + attribute_table_index];
+
+        let palette_table_index = match (tile_x % 4 / 2, tile_y % 4 / 2) {
+            (0, 0) => (attibute_table_value >> 0) & 0b11,
+            (1, 0) => (attibute_table_value >> 2) & 0b11,
+            (0, 1) => (attibute_table_value >> 4) & 0b11,
+            (1, 1) => (attibute_table_value >> 6) & 0b11,
+            _ => unreachable!(),
+        } as usize;
+        let palette_start = palette_table_index * 4 + 1;
+
+        [
+            self.palette_table[0],
+            self.palette_table[palette_start],
+            self.palette_table[palette_start + 1],
+            self.palette_table[palette_start + 2],
+        ]
     }
 
     fn mirror_vram_address(&self, address: u16) -> u16 {

@@ -43,6 +43,7 @@ pub struct NES {
     mirroring: ScreenMirroring,
     ppu_cycles: usize,
     ppu_scanline: usize,
+    ppu_read_buffer: u8,
     pub ppu_registers: ppu::registers::PpuRegisters,
 
     // misc
@@ -67,6 +68,7 @@ impl Default for NES {
             mirroring: ScreenMirroring::Horizontal,
             ppu_cycles: 0,
             ppu_scanline: 0,
+            ppu_read_buffer: 0,
             ppu_registers: ppu::registers::PpuRegisters::default(),
 
             next_interrupt: None,
@@ -250,6 +252,7 @@ impl NES {
             let tile = self.ppu_vram[i] as u16;
             let tile_x = i % 32;
             let tile_y = i / 32;
+            let palette = self.background_palette(tile_x, tile_y);
 
             let tile =
                 &self.chr_rom[(bank + tile * 16) as usize..=(bank + tile * 16 + 15) as usize];
@@ -259,18 +262,12 @@ impl NES {
                 let mut low = tile[y + 8];
 
                 for x in (0..=7).rev() {
-                    let value = (1 & high) << 1 | 1 & low;
+                    let value = (1 & low) << 1 | 1 & high;
 
                     high = high >> 1;
                     low = low >> 1;
 
-                    let color = match value {
-                        0 => palette::SYSTEM_PALLETE[0x01],
-                        1 => palette::SYSTEM_PALLETE[0x23],
-                        2 => palette::SYSTEM_PALLETE[0x27],
-                        3 => palette::SYSTEM_PALLETE[0x30],
-                        _ => panic!("can't be"),
-                    };
+                    let color = palette::SYSTEM_PALLETE[palette[value as usize] as usize];
 
                     self.current_frame
                         .set_pixel(tile_x * 8 + x, tile_y * 8 + y, color);

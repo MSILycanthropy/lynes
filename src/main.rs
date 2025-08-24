@@ -1,3 +1,5 @@
+use std::time::{Duration, Instant};
+
 use lynes::*;
 use sdl2::{
     event::Event,
@@ -8,6 +10,9 @@ use sdl2::{
     EventPump,
 };
 
+const TARGET_FPS: u64 = 60;
+const FRAME_DURATION: Duration = Duration::from_nanos(1_000_000_000 / TARGET_FPS);
+
 fn main() {
     let (creator, mut canvas, mut event_pump) = init_sdl2();
     let mut texture = creator
@@ -17,6 +22,8 @@ fn main() {
     let mut nes = NES::default();
 
     nes.start("roms/pacman.nes", move |frame, controller| {
+        let frame_start = Instant::now();
+
         texture.update(None, frame.data(), 256 * 3).unwrap();
         canvas.copy(&texture, None, None).unwrap();
         canvas.present();
@@ -52,6 +59,11 @@ fn main() {
                 },
                 _ => {}
             }
+        }
+
+        let frame_time = frame_start.elapsed();
+        if frame_time < FRAME_DURATION {
+            std::thread::sleep(FRAME_DURATION - frame_time);
         }
     });
 }

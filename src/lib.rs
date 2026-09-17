@@ -93,10 +93,6 @@ impl NES {
         self.cpu_registers.program_counter = 0xC000;
 
         loop {
-            if self.cpu_cycles == 0 {
-                // logger::log(self);
-            }
-
             let cycles = self.cpu_clock();
 
             if cycles > 0 {

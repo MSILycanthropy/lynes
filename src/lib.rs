@@ -7,12 +7,11 @@ pub mod renderer;
 
 use cpu::{AddrMode, CPU};
 use ppu::PPU;
-use sdl2::sys::Screen;
 
 use crate::{
     cartridge::ScreenMirroring,
     input::Controller,
-    renderer::{palette, Frame, ViewPortRect},
+    renderer::{Frame, ViewPortRect, palette},
 };
 
 #[derive(PartialEq)]
@@ -135,12 +134,16 @@ impl NES {
     // Returns the address and if a page boundary was crossed
     pub fn get_operating_address(&mut self, mode: &AddrMode) -> (u16, bool) {
         match mode {
-            AddrMode::Implied => panic!("Implied addressing mode has no operating address as it is implied"),
-            AddrMode::Accumulator => panic!("Accumulator addressing mode has no operating address as it operates on the accumulator"),
+            AddrMode::Implied => {
+                panic!("Implied addressing mode has no operating address as it is implied")
+            }
+            AddrMode::Accumulator => panic!(
+                "Accumulator addressing mode has no operating address as it operates on the accumulator"
+            ),
             AddrMode::Immediate => {
                 let addr = self.cpu_registers.program_counter;
                 (addr, false)
-            },
+            }
             _ => self.get_absolute_address(self.cpu_registers.program_counter, mode),
         }
     }

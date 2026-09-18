@@ -24,9 +24,41 @@ impl Interrupt {
     fn address(&self) -> u16 {
         match self {
             Interrupt::NMI => 0xFFFA,
-            Interrupt::IRQ => 0xFFFB,
+            Interrupt::IRQ => 0xFFFE,
         }
     }
+}
+
+#[derive(Default, Copy, Clone)]
+struct InterruptState {
+    nmi_pending: bool,
+    irq_asserted: bool,
+}
+
+impl InterruptState {
+    fn take(&mut self, interrupt_disable: bool) -> Option<Interrupt> {
+        if self.nmi_pending {
+            self.nmi_pending = false;
+            return Some(Interrupt::NMI);
+        }
+
+        if self.irq_asserted && !interrupt_disable {
+            return Some(Interrupt::IRQ);
+        }
+
+        None
+    }
+}
+
+pub enum StepKind {
+    Instructrion { pc: u16, opcode: u8 },
+    Interrupt(Interrupt),
+}
+
+pub struct StepResult {
+    pub kind: StepKind,
+    pub cpu_cycles: usize,
+    pub frame_ready: bool,
 }
 
 pub struct NES {
@@ -34,7 +66,7 @@ pub struct NES {
     cpu_ram: [u8; 2048],
     prg_rom: Vec<u8>,
     cpu_cycles: usize,
-    clock_count: usize,
+    total_cpu_cycles: usize,
     pub cpu_registers: cpu::registers::CpuRegisters,
 
     // ppu
@@ -49,7 +81,7 @@ pub struct NES {
     pub ppu_registers: ppu::registers::PpuRegisters,
 
     // misc
-    next_interrupt: Option<Interrupt>,
+    interrupt_state: InterruptState,
 
     current_frame: Frame,
     controller: Controller,
@@ -61,7 +93,7 @@ impl Default for NES {
             cpu_ram: [0; 2048],
             prg_rom: vec![],
             cpu_cycles: 0,
-            clock_count: 0,
+            total_cpu_cycles: 0,
             cpu_registers: cpu::registers::CpuRegisters::default(),
 
             chr_rom: vec![],
@@ -74,7 +106,7 @@ impl Default for NES {
             ppu_read_buffer: 0,
             ppu_registers: ppu::registers::PpuRegisters::default(),
 
-            next_interrupt: None,
+            interrupt_state: InterruptState::default(),
 
             current_frame: Frame::new(),
             controller: Controller::new(),
@@ -83,29 +115,44 @@ impl Default for NES {
 }
 
 impl NES {
-    pub fn start<F>(&mut self, rom_file: &str, mut render_callback: F)
-    where
-        F: FnMut(&Frame, &mut Controller),
-    {
-        let cart = cartridge::Cartridge::load(rom_file);
-        self.insert_cart(cart);
-        self.reset();
-        self.cpu_registers.program_counter = 0xC000;
+    pub fn step(&mut self) -> StepResult {
+        let (kind, cpu_cycles) = self.execute_cpu_action();
+        let frame_ready = self.advance_cpu_cycles(cpu_cycles);
 
-        loop {
-            let cycles = self.cpu_clock();
-
-            if cycles > 0 {
-                let new_frame = self.ppu_clock(cycles);
-
-                self.try_interrupt();
-
-                if new_frame {
-                    self.render();
-                    render_callback(&self.current_frame, &mut self.controller)
-                }
-            }
+        if frame_ready {
+            self.render();
         }
+
+        StepResult {
+            kind,
+            cpu_cycles,
+            frame_ready,
+        }
+    }
+
+    fn advance_cpu_cycles(&mut self, cpu_cycles: usize) -> bool {
+        let mut frame_ready = false;
+
+        for _ in 0..cpu_cycles {
+            self.total_cpu_cycles += 1;
+            frame_ready |= self.ppu_clock(1);
+        }
+
+        frame_ready
+    }
+
+    fn execute_cpu_action(&mut self) -> (StepKind, usize) {
+        let interrupt_disable = self.cpu_registers.status.interrupt_disable();
+
+        if let Some(interrupt) = self.interrupt_state.take(interrupt_disable) {
+            let cycles = self.enter_interrupt(&interrupt);
+
+            return (StepKind::Interrupt(interrupt), cycles);
+        }
+
+        let (pc, opcode, cycles) = self.execute_next_instruction();
+
+        (StepKind::Instructrion { pc, opcode }, cycles)
     }
 
     pub fn reset(&mut self) {
@@ -118,7 +165,7 @@ impl NES {
         self.cpu_registers.program_counter = self.cpu_read_u16(0xFFFC);
 
         self.cpu_cycles = 7;
-        self.clock_count = 7;
+        self.total_cpu_cycles = 7;
         self.ppu_cycles = 21;
     }
 
@@ -217,33 +264,6 @@ impl NES {
             }
             _ => panic!("Invalid absolute addressing mode"),
         }
-    }
-
-    fn try_interrupt(&mut self) {
-        if let None = self.next_interrupt {
-            return;
-        }
-
-        self.perform_interrupt();
-
-        self.next_interrupt = None;
-    }
-
-    fn perform_interrupt(&mut self) {
-        self.stack_push_u16(self.cpu_registers.program_counter);
-        let mut flag = self.cpu_registers.status.clone();
-        flag.set_b(0b01);
-
-        self.stack_push(*flag.into_bytes().first().unwrap());
-        self.cpu_registers.status.set_interrupt_disable(true);
-
-        self.cpu_cycles += 2;
-        self.clock_count += 2;
-        self.ppu_clock(2);
-
-        let interrupt = self.next_interrupt.as_ref().unwrap();
-
-        self.cpu_registers.program_counter = self.cpu_read_u16(interrupt.address());
     }
 
     fn render(&mut self) {

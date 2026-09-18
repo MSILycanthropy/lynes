@@ -1,8 +1,8 @@
 use colored::Colorize;
 
 use crate::{
-    cpu::{self, AddrMode, CPU},
     NES,
+    cpu::{self, AddrMode, CPU},
 };
 
 const ILLEGAL_NOPS: [&'static str; 2] = ["DOP", "TOP"];
@@ -163,6 +163,6 @@ fn cpu_registers_log(nes: &NES) -> String {
         nes.cpu_registers.stack_pointer,
         nes.ppu_scanline,
         nes.ppu_cycles,
-        nes.clock_count,
+        nes.total_cpu_cycles,
     )
 }

@@ -1,4 +1,4 @@
-use crate::{ppu::PPU, NES};
+use crate::{Interrupt, NES, ppu::PPU};
 
 pub(crate) mod instructions;
 pub(crate) mod registers;
@@ -21,7 +21,9 @@ pub enum AddrMode {
 }
 
 pub trait CPU {
-    fn cpu_clock(&mut self) -> usize;
+    fn enter_interrupt(&mut self, interrupt: &Interrupt) -> usize;
+    fn execute_next_instruction(&mut self) -> (u16, u8, usize);
+
     fn cpu_read(&mut self, addr: u16) -> u8;
     fn cpu_write(&mut self, addr: u16, data: u8);
     fn cpu_read_u16(&mut self, addr: u16) -> u16 {
@@ -54,28 +56,35 @@ pub trait CPU {
 }
 
 impl CPU for NES {
-    fn cpu_clock(&mut self) -> usize {
-        if self.cpu_cycles == 0 {
-            let opcode = self.cpu_read(self.cpu_registers.program_counter);
+    fn enter_interrupt(&mut self, interrupt: &Interrupt) -> usize {
+        self.stack_push_u16(self.cpu_registers.program_counter);
 
-            self.cpu_registers.program_counter += 1;
+        let mut status = self.cpu_registers.status.clone();
+        status.set_b(0b10);
 
-            let old_program_counter = self.cpu_registers.program_counter;
+        self.stack_push(status.bits());
 
-            let (length, cycles) = self.execute_instruction(opcode);
+        self.cpu_registers.status.set_interrupt_disable(true);
+        self.cpu_registers.program_counter = self.cpu_read_u16(interrupt.address());
 
-            if old_program_counter == self.cpu_registers.program_counter {
-                self.cpu_registers.program_counter += length;
-            }
+        7
+    }
 
-            self.cpu_cycles += cycles;
-            self.clock_count += cycles;
+    fn execute_next_instruction(&mut self) -> (u16, u8, usize) {
+        let pc = self.cpu_registers.program_counter;
+        let opcode = self.cpu_read(pc);
+        self.cpu_registers.program_counter = pc.wrapping_add(1);
 
-            return cycles;
+        let old_program_counter = self.cpu_registers.program_counter;
+
+        let (length, cycles) = self.execute_instruction(opcode);
+
+        if old_program_counter == self.cpu_registers.program_counter {
+            self.cpu_registers.program_counter =
+                self.cpu_registers.program_counter.wrapping_add(length);
         }
 
-        self.cpu_cycles -= 1;
-        return 0;
+        (pc, opcode, cycles)
     }
 
     fn cpu_read(&mut self, addr: u16) -> u8 {

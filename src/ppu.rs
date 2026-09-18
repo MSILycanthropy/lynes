@@ -1,4 +1,4 @@
-use crate::{cartridge::ScreenMirroring, NES};
+use crate::{NES, cartridge::ScreenMirroring};
 
 pub(crate) mod registers;
 
@@ -42,13 +42,12 @@ impl PPU for NES {
                 self.ppu_registers.status.set_sprite_zero_hit(true);
 
                 if self.ppu_registers.control.generate_nmi() {
-                    self.next_interrupt = Some(crate::Interrupt::NMI)
+                    self.interrupt_state.nmi_pending = true;
                 }
             }
 
             if self.ppu_scanline >= 262 {
                 self.ppu_scanline = 0;
-                self.next_interrupt = None;
                 self.ppu_registers.status.set_sprite_zero_hit(false);
                 self.ppu_registers.status.set_vblank_started(false);
 
@@ -123,7 +122,7 @@ impl PPU for NES {
         let nmi_status_after = self.ppu_registers.control.generate_nmi();
 
         if !nmi_status_before && nmi_status_after && self.ppu_registers.status.vblank_started() {
-            self.next_interrupt = Some(crate::Interrupt::NMI)
+            self.interrupt_state.nmi_pending = true;
         }
     }
 

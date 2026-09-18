@@ -179,6 +179,13 @@ impl NES {
     }
 
     pub fn insert_cart(&mut self, cart: cartridge::Cartridge) {
+        assert!(
+            cart.screen_mirroring != ScreenMirroring::FourScreen,
+            "No four screen mirroring yet cuz it hard."
+        );
+
+        self.mirroring = cart.screen_mirroring;
+
         self.prg_rom = cart.prg_rom;
         self.chr_rom = cart.chr_rom;
     }

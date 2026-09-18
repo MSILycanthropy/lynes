@@ -92,16 +92,10 @@ impl PPU for NES {
                 self.ppu_read_buffer = self.chr_rom[address as usize];
                 result
             }
-            0x2000..=0x2FFF => {
+            0x2000..=0x3EFF => {
                 let result = self.ppu_read_buffer;
                 self.ppu_read_buffer = self.ppu_vram[self.mirror_vram_address(address) as usize];
                 result
-            }
-            0x3000..=0x3EFF => {
-                unreachable!(
-                    "0x3000..0x3EFF shouldnt be used, attempted to use {}",
-                    address
-                )
             }
             0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C => {
                 let add_mirror = address - 0x10;
@@ -115,17 +109,16 @@ impl PPU for NES {
     fn ppu_write(&mut self, value: u8) {
         let address = self.ppu_registers.address.as_u16();
         match address {
-            0..=0x1fff => println!("attempt to write to chr rom space {}", address),
-            0x2000..=0x2fff => {
+            0..=0x1FFF => println!("attempt to write to chr rom space {}", address),
+            0x2000..=0x3EFF => {
                 self.ppu_vram[self.mirror_vram_address(address) as usize] = value;
             }
-            0x3000..=0x3eff => unimplemented!("address {} shouldn't be used in reallity", address),
-            0x3f10 | 0x3f14 | 0x3f18 | 0x3f1c => {
-                let add_mirror = address - 0x10;
-                self.palette_table[(add_mirror - 0x3f00) as usize] = value;
+            0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C => {
+                let addr_mirror = address - 0x10;
+                self.palette_table[(addr_mirror - 0x3F00) as usize] = value;
             }
-            0x3f00..=0x3fff => {
-                self.palette_table[(address - 0x3f00) as usize] = value;
+            0x3F00..=0x3FFF => {
+                self.palette_table[(address - 0x3F00) as usize] = value;
             }
             _ => panic!("unexpected access to mirrored space {}", address),
         }

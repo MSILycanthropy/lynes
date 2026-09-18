@@ -1,5 +1,115 @@
 use super::PPU;
-use crate::{Interrupt, NES};
+use crate::{
+    Interrupt, NES,
+    cartridge::{Cartridge, ScreenMirroring},
+    cpu::CPU,
+};
+
+fn cartridge(mirroring: ScreenMirroring) -> Cartridge {
+    Cartridge {
+        prg_rom: vec![0; 32_768],
+        chr_rom: vec![0; 8_192],
+        mapper: 0,
+        screen_mirroring: mirroring,
+    }
+}
+
+fn set_vram_address(nes: &mut NES, address: u16) {
+    nes.cpu_read(0x2002); // Start with the first PPUADDR write.
+    nes.cpu_write(0x2006, (address >> 8) as u8);
+    nes.cpu_write(0x2006, address as u8);
+}
+
+fn write_vram(nes: &mut NES, address: u16, value: u8) {
+    set_vram_address(nes, address);
+    nes.cpu_write(0x2007, value);
+}
+
+fn read_nametable(nes: &mut NES, address: u16) -> u8 {
+    set_vram_address(nes, address);
+    nes.cpu_read(0x2007); // Discard the previous buffered value.
+    // Stay in nametable space even when testing the last byte at $3EFF.
+    set_vram_address(nes, address);
+    nes.cpu_read(0x2007)
+}
+
+#[test]
+fn nametable_mirroring_uses_cartridge_configuration() {
+    for (mirroring, banks) in [
+        (ScreenMirroring::Vertical, [0, 1, 0, 1]),
+        (ScreenMirroring::Horizontal, [0, 0, 1, 1]),
+    ] {
+        let mut nes = NES::default();
+        nes.insert_cart(cartridge(mirroring));
+
+        // Tile and attribute memory, including both ends of each nametable.
+        for offset in [0, 0x3BF, 0x3C0, 0x3FF] {
+            let mut expected = [0; 2];
+            for (table, &bank) in banks.iter().enumerate() {
+                let value = 0x10 + table as u8;
+                write_vram(&mut nes, 0x2000 + table as u16 * 0x400 + offset, value);
+                expected[bank] = value;
+
+                // Writing any alias changes only its own physical nametable.
+                for (other, &other_bank) in banks.iter().enumerate() {
+                    let address = 0x2000 + other as u16 * 0x400 + offset;
+                    assert_eq!(
+                        read_nametable(&mut nes, address),
+                        expected[other_bank],
+                        "read ${address:04X} after writing table {table}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn upper_nametable_range_mirrors_reads_and_writes() {
+    for mirroring in [ScreenMirroring::Vertical, ScreenMirroring::Horizontal] {
+        let mut nes = NES::default();
+        nes.insert_cart(cartridge(mirroring));
+
+        for offset in 0..0xF00u16 {
+            let value = (offset as u8).wrapping_add((offset >> 8) as u8);
+            write_vram(&mut nes, 0x2000 + offset, value);
+            assert_eq!(
+                read_nametable(&mut nes, 0x3000 + offset),
+                value,
+                "upper alias at offset ${offset:03X}"
+            );
+
+            write_vram(&mut nes, 0x3000 + offset, !value);
+            assert_eq!(
+                read_nametable(&mut nes, 0x2000 + offset),
+                !value,
+                "lower alias at offset ${offset:03X}"
+            );
+        }
+    }
+}
+
+#[test]
+fn palette_boundary_does_not_use_nametable_mapping_or_buffering() {
+    let mut nes = NES::default();
+    nes.insert_cart(cartridge(ScreenMirroring::Vertical));
+    write_vram(&mut nes, 0x3EFF, 0xA5);
+    write_vram(&mut nes, 0x3F00, 0x12);
+    write_vram(&mut nes, 0x3F1F, 0x23);
+
+    assert_eq!(read_nametable(&mut nes, 0x2EFF), 0xA5);
+    set_vram_address(&mut nes, 0x3F00);
+    assert_eq!(nes.cpu_read(0x2007), 0x12);
+    set_vram_address(&mut nes, 0x3F1F);
+    assert_eq!(nes.cpu_read(0x2007), 0x23);
+    assert_eq!(read_nametable(&mut nes, 0x3EFF), 0xA5);
+}
+
+#[test]
+#[should_panic(expected = "No four screen mirroring")]
+fn four_screen_cartridges_are_rejected() {
+    NES::default().insert_cart(cartridge(ScreenMirroring::FourScreen));
+}
 
 fn assert_frame_length(nes: &mut NES, dots: usize) {
     assert_eq!((nes.ppu_scanline, nes.ppu_dot), (0, 0));

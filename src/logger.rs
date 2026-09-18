@@ -162,7 +162,7 @@ fn cpu_registers_log(nes: &NES) -> String {
         nes.cpu_registers.status.bits(),
         nes.cpu_registers.stack_pointer,
         nes.ppu_scanline,
-        nes.ppu_cycles,
+        nes.ppu_dot,
         nes.total_cpu_cycles,
     )
 }

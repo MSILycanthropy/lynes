@@ -2,8 +2,11 @@ use crate::{NES, cartridge::ScreenMirroring};
 
 pub(crate) mod registers;
 
+#[cfg(test)]
+mod tests;
+
 pub trait PPU {
-    fn ppu_clock(&mut self, cycles: usize) -> bool;
+    fn tick_ppu(&mut self) -> bool;
     fn ppu_read(&mut self) -> u8;
     fn ppu_write(&mut self, value: u8);
 
@@ -26,36 +29,56 @@ pub trait PPU {
 }
 
 impl PPU for NES {
-    fn ppu_clock(&mut self, cycles: usize) -> bool {
-        self.ppu_cycles += cycles * 3;
+    fn tick_ppu(&mut self) -> bool {
+        let rendering_enabled =
+            self.ppu_registers.mask.show_background() || self.ppu_registers.mask.show_sprite();
 
-        if self.ppu_cycles >= 341 {
-            if self.is_sprite_0_hit(self.ppu_cycles) {
-                self.ppu_registers.status.set_sprite_zero_hit(true);
+        // TODO: Regions so that we dont hardcode NTSC
+        let frame_ready = match (self.ppu_scanline, self.ppu_dot) {
+            (261, 339) if self.ppu_odd_frame && rendering_enabled => {
+                self.ppu_scanline = 0;
+                self.ppu_dot = 0;
+                true
+            }
+            (261, 340) => {
+                self.ppu_scanline = 0;
+                self.ppu_dot = 0;
+                true
+            }
+            (_, 340) => {
+                self.ppu_scanline += 1;
+                self.ppu_dot = 0;
+                false
             }
 
-            self.ppu_cycles = self.ppu_cycles - 341;
-            self.ppu_scanline += 1;
+            _ => {
+                self.ppu_dot += 1;
 
-            if self.ppu_scanline == 241 {
+                false
+            }
+        };
+
+        if frame_ready {
+            self.ppu_odd_frame = !self.ppu_odd_frame;
+        }
+
+        match (self.ppu_scanline, self.ppu_dot) {
+            (241, 1) => {
                 self.ppu_registers.status.set_vblank_started(true);
-                self.ppu_registers.status.set_sprite_zero_hit(true);
 
                 if self.ppu_registers.control.generate_nmi() {
                     self.interrupt_state.nmi_pending = true;
                 }
             }
-
-            if self.ppu_scanline >= 262 {
-                self.ppu_scanline = 0;
-                self.ppu_registers.status.set_sprite_zero_hit(false);
+            (261, 1) => {
                 self.ppu_registers.status.set_vblank_started(false);
-
-                return true;
+                self.ppu_registers.status.set_sprite_zero_hit(false);
+                self.ppu_registers.status.set_sprite_overflow(false);
             }
+            _ => {}
         }
 
-        return false;
+        return frame_ready;
     }
 
     fn ppu_read(&mut self) -> u8 {

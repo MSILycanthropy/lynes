@@ -75,10 +75,11 @@ pub struct NES {
     ppu_vram: [u8; 2048],
     oam_data: [u8; 256],
     mirroring: ScreenMirroring,
-    ppu_cycles: usize,
+    ppu_dot: usize,
     ppu_scanline: usize,
     ppu_read_buffer: u8,
     pub ppu_registers: ppu::registers::PpuRegisters,
+    ppu_odd_frame: bool,
 
     // misc
     interrupt_state: InterruptState,
@@ -101,10 +102,11 @@ impl Default for NES {
             ppu_vram: [0; 2048],
             oam_data: [0; 256],
             mirroring: ScreenMirroring::Horizontal,
-            ppu_cycles: 0,
+            ppu_dot: 0,
             ppu_scanline: 0,
             ppu_read_buffer: 0,
             ppu_registers: ppu::registers::PpuRegisters::default(),
+            ppu_odd_frame: false,
 
             interrupt_state: InterruptState::default(),
 
@@ -135,7 +137,10 @@ impl NES {
 
         for _ in 0..cpu_cycles {
             self.total_cpu_cycles += 1;
-            frame_ready |= self.ppu_clock(1);
+
+            for _ in 0..3 {
+                frame_ready |= self.tick_ppu();
+            }
         }
 
         frame_ready
@@ -166,7 +171,7 @@ impl NES {
 
         self.cpu_cycles = 7;
         self.total_cpu_cycles = 7;
-        self.ppu_cycles = 21;
+        self.ppu_dot = 21;
     }
 
     pub fn insert_cart(&mut self, cart: cartridge::Cartridge) {

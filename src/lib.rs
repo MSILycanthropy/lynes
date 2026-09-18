@@ -73,6 +73,8 @@ pub struct NES {
     chr_rom: Vec<u8>,
     palette_table: [u8; 32],
     ppu_vram: [u8; 2048],
+    prg_ram: Vec<u8>,
+
     oam_data: [u8; 256],
     mirroring: ScreenMirroring,
     ppu_dot: usize,
@@ -93,6 +95,7 @@ impl Default for NES {
         Self {
             cpu_ram: [0; 2048],
             prg_rom: vec![],
+            prg_ram: vec![0; 8192],
             cpu_cycles: 0,
             total_cpu_cycles: 0,
             cpu_registers: cpu::registers::CpuRegisters::default(),
@@ -100,6 +103,7 @@ impl Default for NES {
             chr_rom: vec![],
             palette_table: [0; 32],
             ppu_vram: [0; 2048],
+
             oam_data: [0; 256],
             mirroring: ScreenMirroring::Horizontal,
             ppu_dot: 0,

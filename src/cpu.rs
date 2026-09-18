@@ -136,7 +136,7 @@ impl CPU for NES {
             }
             0x2000 => self.ppu_write_control(data),
             0x2001 => self.ppu_write_mask(data),
-            0x2002 => panic!("attempt to write to ppu status register.. dont do that"),
+            0x2002 => {} // Writes dont change PPUSTATUS, but we do have tests that.. well test that.
             0x2003 => self.ppu_write_oam_address(data),
             0x2004 => self.ppu_write_oam_data(data),
             0x2005 => self.ppu_write_scroll(data),

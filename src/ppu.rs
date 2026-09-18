@@ -1,6 +1,8 @@
 use crate::{NES, cartridge::ScreenMirroring};
 
+mod palette;
 pub(crate) mod registers;
+mod render;
 
 #[cfg(test)]
 mod tests;

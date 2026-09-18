@@ -33,6 +33,114 @@ fn read_nametable(nes: &mut NES, address: u16) -> u8 {
     nes.cpu_read(0x2007)
 }
 
+fn read_palette(nes: &mut NES, address: u16) -> u8 {
+    set_vram_address(nes, address);
+    nes.cpu_read(0x2007)
+}
+
+#[test]
+fn palette_reads_and_writes_mirror_every_32_bytes() {
+    let mut nes = NES::default();
+
+    for base in 0x3F00..=0x3F1F {
+        for displacement in (0..0x100).step_by(0x20) {
+            let alias = base + displacement;
+            write_vram(&mut nes, base, 0x12);
+            assert_eq!(
+                read_palette(&mut nes, alias),
+                0x12,
+                "read ${alias:04X} after writing ${base:04X}"
+            );
+
+            write_vram(&mut nes, alias, 0x2B);
+            assert_eq!(
+                read_palette(&mut nes, base),
+                0x2B,
+                "read ${base:04X} after writing ${alias:04X}"
+            );
+        }
+    }
+}
+
+#[test]
+fn special_palette_aliases_work_in_both_directions_in_every_mirror() {
+    let mut nes = NES::default();
+
+    for (background, sprite) in [
+        (0x3F00, 0x3F10),
+        (0x3F04, 0x3F14),
+        (0x3F08, 0x3F18),
+        (0x3F0C, 0x3F1C),
+    ] {
+        for displacement in (0..0x100).step_by(0x20) {
+            for address in [background + displacement, sprite + displacement] {
+                let value = 1
+                    + (displacement / 0x20) as u8
+                    + if address == sprite + displacement {
+                        16
+                    } else {
+                        0
+                    };
+                write_vram(&mut nes, address, value);
+                for other_displacement in (0..0x100).step_by(0x20) {
+                    for alias in [background + other_displacement, sprite + other_displacement] {
+                        assert_eq!(
+                            read_palette(&mut nes, alias),
+                            value,
+                            "read ${alias:04X} after writing ${address:04X}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn distinct_palette_entries_do_not_alias() {
+    let mut nes = NES::default();
+    // The 28 independent bytes, including background entries $04/$08/$0C.
+    let entries = [
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E,
+        0x0F, 0x11, 0x12, 0x13, 0x15, 0x16, 0x17, 0x19, 0x1A, 0x1B, 0x1D, 0x1E, 0x1F,
+    ];
+    for entry in entries {
+        write_vram(&mut nes, 0x3F00 + entry, 0x20 + entry as u8);
+    }
+    for entry in entries {
+        assert_eq!(
+            read_palette(&mut nes, 0x3F00 + entry),
+            0x20 + entry as u8,
+            "palette entry ${entry:02X} was overwritten through another entry"
+        );
+    }
+}
+
+#[test]
+fn palette_writes_store_only_six_color_bits() {
+    let mut nes = NES::default();
+    for (written, expected) in [
+        (0x00, 0x00),
+        (0x3F, 0x3F),
+        (0x40, 0x00),
+        (0x7F, 0x3F),
+        (0x80, 0x00),
+        (0xC5, 0x05),
+        (0xFF, 0x3F),
+    ] {
+        for address in 0x3F00..=0x3FFF {
+            write_vram(&mut nes, address, written);
+            // Inspect storage as well as readback: the renderer reads it directly.
+            assert!(nes.palette_table.iter().all(|&value| value <= 0x3F));
+            assert_eq!(
+                read_palette(&mut nes, address),
+                expected,
+                "write ${written:02X} at ${address:04X}"
+            );
+        }
+    }
+}
+
 #[test]
 fn nametable_mirroring_uses_cartridge_configuration() {
     for (mirroring, banks) in [

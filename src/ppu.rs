@@ -97,11 +97,7 @@ impl PPU for NES {
                 self.ppu_read_buffer = self.ppu_vram[self.mirror_vram_address(address) as usize];
                 result
             }
-            0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C => {
-                let add_mirror = address - 0x10;
-                self.palette_table[(add_mirror - 0x3f00) as usize]
-            }
-            0x3F00..=0x3FFF => self.palette_table[(address - 0x3F00) as usize],
+            0x3F00..=0x3FFF => self.palette_table[palette_index(address)],
             _ => unreachable!("attempted to access mirrored address space {}", address),
         }
     }
@@ -113,12 +109,8 @@ impl PPU for NES {
             0x2000..=0x3EFF => {
                 self.ppu_vram[self.mirror_vram_address(address) as usize] = value;
             }
-            0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C => {
-                let addr_mirror = address - 0x10;
-                self.palette_table[(addr_mirror - 0x3F00) as usize] = value;
-            }
             0x3F00..=0x3FFF => {
-                self.palette_table[(address - 0x3F00) as usize] = value;
+                self.palette_table[palette_index(address)] = value & 0x3F;
             }
             _ => panic!("unexpected access to mirrored space {}", address),
         }
@@ -232,5 +224,14 @@ impl PPU for NES {
         let x = self.oam_data[3] as usize;
 
         (y == self.ppu_scanline as usize) && x <= cycle && self.ppu_registers.mask.show_sprite()
+    }
+}
+
+fn palette_index(address: u16) -> usize {
+    let index = (address & 0x1F) as usize;
+
+    match index {
+        0x10 | 0x14 | 0x18 | 0x1C => index - 0x10,
+        _ => index,
     }
 }

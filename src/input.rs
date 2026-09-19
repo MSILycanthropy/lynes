@@ -17,6 +17,10 @@ impl ButtonState {
     fn bits(&self) -> u8 {
         *self.clone().into_bytes().first().unwrap()
     }
+
+    pub fn clear(&mut self) {
+        *self = Self::new();
+    }
 }
 
 pub struct Controller {

@@ -197,8 +197,8 @@ impl NES {
         self.chr_rom = cart.chr_rom;
     }
 
-    pub fn set_buttons(&mut self, buttons: ButtonState) {
-        self.controller.button_state = buttons;
+    pub fn update_buttons(&mut self, update: impl FnOnce(&mut ButtonState)) {
+        update(&mut self.controller.button_state);
     }
 
     // Returns the address and if a page boundary was crossed

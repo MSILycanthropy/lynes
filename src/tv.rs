@@ -1,3 +1,8 @@
+pub mod chafa;
+
+#[cfg(feature = "wgpu")]
+pub mod wgpu;
+
 use crate::frame::Frame;
 
 pub trait TV {

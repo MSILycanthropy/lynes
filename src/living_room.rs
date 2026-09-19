@@ -1,12 +1,20 @@
+use std::time::Instant;
+
 use crate::{NES, input::ButtonState, tv::TV};
 
+#[cfg(feature = "wgpu")]
+mod wgpu;
+
 /// This is effectivly an Application. A given frontend will do it's thing against this
-/// Let's us easily wrap the NES and TV into one thing while managing _cycles_
-/// The actual frontend manages time.
-struct LivingRoom<T: TV> {
+pub struct LivingRoom<T: TV> {
     nes: NES,
     tv: Option<T>,
     cycles_ahead: usize,
+    last_tick: Option<Instant>,
+    cycle_fraction: f64,
+
+    next_present_time: Option<Instant>,
+    frame_pending: bool,
 }
 
 impl<T: TV> LivingRoom<T> {
@@ -15,6 +23,11 @@ impl<T: TV> LivingRoom<T> {
             nes,
             tv: None,
             cycles_ahead: 0,
+            last_tick: None,
+            cycle_fraction: 0.0,
+
+            next_present_time: None,
+            frame_pending: false,
         }
     }
 
@@ -22,8 +35,8 @@ impl<T: TV> LivingRoom<T> {
         self.tv = Some(tv);
     }
 
-    pub fn set_buttons(&mut self, buttons: ButtonState) {
-        self.nes.set_buttons(buttons);
+    pub fn update_buttons(&mut self, update: impl FnOnce(&mut ButtonState)) {
+        self.nes.update_buttons(update);
     }
 
     /// Advances by the requested CPU cycle budget.

@@ -1,9 +1,15 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crate::{NES, input::ButtonState, tv::TV};
 
-#[cfg(feature = "wgpu")]
+pub mod ratatui;
+
 mod wgpu;
+
+const WAKE_INTERVAL: Duration = Duration::from_millis(4);
+const MAX_FRAMERATE: u64 = 60;
+const PRESENT_INTERVAL: Duration = Duration::from_nanos(1_000_000_000 / MAX_FRAMERATE);
+pub const CPU_HZ: f64 = 1_789_773.0;
 
 /// This is effectivly an Application. A given frontend will do it's thing against this
 pub struct LivingRoom<T: TV> {
@@ -61,6 +67,22 @@ impl<T: TV> LivingRoom<T> {
 
         self.cycles_ahead = elapsed - budget;
         frame_ready
+    }
+
+    fn advance_to(&mut self, now: Instant) {
+        let Some(previous) = self.last_tick.replace(now) else {
+            return;
+        };
+
+        let elapsed = now.duration_since(previous);
+        let cycles = elapsed.as_secs_f64() * CPU_HZ + self.cycle_fraction;
+        let budget = cycles.floor() as usize;
+
+        self.cycle_fraction = cycles - budget as f64;
+
+        if self.advance(budget) {
+            self.frame_pending = true;
+        }
     }
 
     pub fn present(&mut self) -> Result<(), T::Error> {

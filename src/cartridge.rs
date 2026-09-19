@@ -1,3 +1,5 @@
+use std::path::Path;
+
 const NES_TAG: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
 const PRG_ROM_PAGE_SIZE: usize = 16384;
 const CHR_ROM_PAGE_SIZE: usize = 8192;
@@ -17,7 +19,7 @@ pub struct Cartridge {
 }
 
 impl Cartridge {
-    pub fn load(file: &str) -> Self {
+    pub fn load(file: impl AsRef<Path>) -> Self {
         let bytes = std::fs::read(file).expect("Unable to read Cartridge file");
         Self::load_bytes(&bytes)
     }

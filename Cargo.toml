@@ -6,18 +6,20 @@ edition = "2024"
 [[bin]]
 name = "lynes"
 path = "src/main.rs"
-required-features = ["wgpu"]
-
-[features]
-default = []
-wgpu = ["dep:wgpu", "dep:winit", "dep:pollster"]
-chafa = ["dep:chafa-syms-rs", "dep:crossterm"]
 
 [dependencies]
+clap = { version = "4", features = ["derive"] }
 colored = "3"
 modular-bitfield = "0.13"
-wgpu = { version = "30", optional = true }
-winit = { version = "0.30", optional = true }
-pollster = { version = "1", optional = true }
-chafa-syms-rs = { version = "0.1.1", optional = true }
-crossterm = { version = "0.29", optional = true }
+thiserror = "2"
+wgpu = "30"
+winit = "0.30"
+pollster = "1"
+crossterm = "0.29"
+ratatui = { version = "0.30", default-features = false, features = ["crossterm"] }
+image = "0.25"
+
+[dependencies.ratatui-image]
+version = "11"
+default-features = false
+features = ["crossterm"]

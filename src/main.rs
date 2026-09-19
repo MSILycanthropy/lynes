@@ -1,28 +1,39 @@
-use std::{env, error::Error, num::NonZeroU32};
+use std::{error::Error, path::PathBuf};
 
-use lynes::{NES, cartridge::Cartridge, living_room::LivingRoom, tv::wgpu::WgpuTV};
+use clap::Parser;
+use lynes::{
+    NES,
+    cartridge::Cartridge,
+    living_room::LivingRoom,
+    tv::{ratatui::RatatuiTV, wgpu::WgpuTV},
+};
 use winit::event_loop::EventLoop;
 
+#[derive(Parser)]
+#[command(version, about = "An NES emulator with window and terminal frontends")]
+struct Args {
+    /// Path to the NES ROM
+    rom: PathBuf,
+
+    /// Use the terminal frontend
+    #[arg(long)]
+    terminal: bool,
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
-    let mut args = env::args().skip(1);
-    let rom_path = args.next().ok_or("Usage: lynes <rom.nes>")?;
-
-    if args.next().is_some() {
-        return Err("Usage: lynes <rom.nes>".into());
-    }
-
-    if rom_path == "--help" || rom_path == "-h" {
-        println!("Usage: lynes <rom.nes>");
-        return Ok(());
-    }
+    let args = Args::parse();
 
     let mut nes = NES::default();
-    nes.insert_cart(Cartridge::load(&rom_path));
+    nes.insert_cart(Cartridge::load(&args.rom));
     nes.reset();
 
-    let mut living_room = LivingRoom::<WgpuTV>::new(nes);
-    let event_loop = EventLoop::new()?;
-    event_loop.run_app(&mut living_room)?;
+    if args.terminal {
+        LivingRoom::<RatatuiTV>::new(nes).run()?;
+    } else {
+        let event_loop = EventLoop::new()?;
+        let mut living_room = LivingRoom::<WgpuTV>::new(nes);
+        event_loop.run_app(&mut living_room)?;
+    }
 
     Ok(())
 }

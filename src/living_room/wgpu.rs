@@ -1,4 +1,4 @@
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use pollster::block_on;
 use winit::{
@@ -10,15 +10,10 @@ use winit::{
     window::{Window, WindowId},
 };
 
-const CPU_HZ: f64 = 1_789_773.0;
-const WAKE_INTERVAL: Duration = Duration::from_millis(4);
-const MAX_FRAMERATE: u64 = 60;
-const PRESENT_INTERVAL: Duration = Duration::from_nanos(1_000_000_000 / MAX_FRAMERATE);
-
 use crate::{
     frame::{FRAME_HEIGHT, FRAME_WIDTH},
     input::ButtonState,
-    living_room::LivingRoom,
+    living_room::{LivingRoom, PRESENT_INTERVAL, WAKE_INTERVAL},
     tv::wgpu::WgpuTV,
 };
 
@@ -149,19 +144,7 @@ impl ApplicationHandler for LivingRoom<WgpuTV> {
             return;
         }
 
-        let now = Instant::now();
-
-        if let Some(previous) = self.last_tick.replace(now) {
-            let elapsed = now.duration_since(previous);
-            let cycles = elapsed.as_secs_f64() * CPU_HZ + self.cycle_fraction;
-            let budget = cycles.floor() as usize;
-
-            self.cycle_fraction = cycles - budget as f64;
-
-            if self.advance(budget) {
-                self.frame_pending = true;
-            }
-        }
+        self.advance_to(Instant::now());
 
         let now = Instant::now();
         let mut wake_at = now + WAKE_INTERVAL;

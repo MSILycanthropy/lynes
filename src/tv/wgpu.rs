@@ -1,24 +1,48 @@
 use std::sync::Arc;
 
+use thiserror::Error;
 use wgpu::{
     Adapter, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingResource, BindingType, Color,
+    BindGroupLayoutEntry, BindingResource, BindingType, Color, CreateSurfaceError,
     CurrentSurfaceTexture::{Lost, Occluded, Outdated, Suboptimal, Success, Timeout, Validation},
     Device, Extent3d, FilterMode, FragmentState, Instance, LoadOp, Operations, PipelineLayout,
     PipelineLayoutDescriptor, Queue, RenderPassColorAttachment, RenderPassDescriptor,
-    RenderPipeline, RenderPipelineDescriptor, RequestAdapterOptions, SamplerBindingType,
-    ShaderModule, ShaderModuleDescriptor, ShaderSource, ShaderStages, StoreOp, Surface,
-    SurfaceConfiguration, TexelCopyBufferLayout, Texture, TextureDimension, TextureFormat,
-    TextureSampleType, TextureUsages, TextureViewDimension, VertexState,
+    RenderPipeline, RenderPipelineDescriptor, RequestAdapterError, RequestAdapterOptions,
+    RequestDeviceError, SamplerBindingType, ShaderModule, ShaderModuleDescriptor, ShaderSource,
+    ShaderStages, StoreOp, Surface, SurfaceConfiguration, TexelCopyBufferLayout, Texture,
+    TextureDimension, TextureFormat, TextureSampleType, TextureUsages, TextureViewDimension,
+    VertexState,
     wgt::{DeviceDescriptor, SamplerDescriptor, TextureDescriptor},
 };
-use winit::{application::ApplicationHandler, dpi::PhysicalSize, window::Window};
+use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::{
     frame::{FRAME_HEIGHT, FRAME_WIDTH, Frame},
-    living_room::LivingRoom,
     tv::TV,
 };
+
+pub type WgpuResult<T> = Result<T, WgpuError>;
+
+#[derive(Debug, Error)]
+pub enum WgpuError {
+    #[error("failed to create rendering surface: {0}")]
+    CreateSurface(#[from] CreateSurfaceError),
+
+    #[error("failed to request GPU adapter: {0}")]
+    RequestAdapter(#[from] RequestAdapterError),
+
+    #[error("failed to request GPU device: {0}")]
+    RequestDevice(#[from] RequestDeviceError),
+
+    #[error("no supported surface configuration")]
+    UnsupportedSurfaceConfiguration,
+
+    #[error("no rendering surface is available")]
+    MissingSurface,
+
+    #[error("surface acquisition failed validation")]
+    SurfaceValidation,
+}
 
 pub struct WgpuTV {
     window: Arc<Window>,
@@ -38,7 +62,7 @@ pub struct WgpuTV {
 }
 
 impl WgpuTV {
-    pub async fn new(window: Window) -> Result<Self, Box<dyn std::error::Error>> {
+    pub async fn new(window: Window) -> WgpuResult<Self> {
         let frame_pixels = vec![255; FRAME_WIDTH * FRAME_HEIGHT * 4];
         let window = Arc::new(window);
 
@@ -63,7 +87,7 @@ impl WgpuTV {
 
         let config = surface
             .get_default_config(&adapter, size.width, size.height)
-            .ok_or("No supported surface configuration")?;
+            .ok_or(WgpuError::UnsupportedSurfaceConfiguration)?;
 
         if size.width > 0 && size.height > 0 {
             surface.configure(&device, &config);
@@ -235,14 +259,14 @@ impl WgpuTV {
         surface.configure(&self.device, &self.config);
     }
 
-    fn recreate_surface(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    fn recreate_surface(&mut self) -> WgpuResult<()> {
         drop(self.surface.take());
 
         let surface = self.instance.create_surface(Arc::clone(&self.window))?;
         let size = self.window.inner_size();
         let config = surface
             .get_default_config(&self.adapter, size.width, size.height)
-            .ok_or("No supported surface configuration")?;
+            .ok_or(WgpuError::UnsupportedSurfaceConfiguration)?;
 
         if size.width > 0 && size.height > 0 {
             surface.configure(&self.device, &config);
@@ -265,13 +289,10 @@ impl WgpuTV {
 }
 
 impl TV for WgpuTV {
-    type Error = Box<dyn std::error::Error>;
+    type Error = WgpuError;
 
-    fn present(&mut self, frame: &Frame) -> Result<(), Self::Error> {
-        let surface = self
-            .surface
-            .as_ref()
-            .ok_or("No rendering surface is available")?;
+    fn present(&mut self, frame: &Frame) -> WgpuResult<()> {
+        let surface = self.surface.as_ref().ok_or(WgpuError::MissingSurface)?;
 
         if self.config.width == 0 || self.config.height == 0 {
             return Ok(());
@@ -290,7 +311,7 @@ impl TV for WgpuTV {
                 return Ok(());
             }
             Validation => {
-                return Err("Surface acquisition failed validation".into());
+                return Err(WgpuError::SurfaceValidation);
             }
         };
 

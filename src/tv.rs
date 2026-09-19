@@ -1,6 +1,5 @@
-pub mod chafa;
+pub mod ratatui;
 
-#[cfg(feature = "wgpu")]
 pub mod wgpu;
 
 use crate::frame::Frame;

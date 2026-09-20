@@ -4,6 +4,7 @@ pub mod frame;
 pub mod input;
 pub mod living_room;
 pub mod logger;
+pub mod mapper;
 pub mod ppu;
 pub mod tv;
 
@@ -11,7 +12,7 @@ use cpu::{AddrMode, CPU};
 use ppu::PPU;
 
 use crate::{
-    cartridge::ScreenMirroring,
+    cartridge::{Cartridge, ScreenMirroring},
     frame::Frame,
     input::{ButtonState, Controller},
 };
@@ -66,19 +67,15 @@ pub struct StepResult {
 pub struct NES {
     // cpu
     cpu_ram: [u8; 2048],
-    prg_rom: Vec<u8>,
     cpu_cycles: usize,
     total_cpu_cycles: usize,
     pub cpu_registers: cpu::registers::CpuRegisters,
 
     // ppu
-    chr_rom: Vec<u8>,
     palette_table: [u8; 32],
     ppu_vram: [u8; 2048],
-    prg_ram: Vec<u8>,
 
     oam_data: [u8; 256],
-    mirroring: ScreenMirroring,
     ppu_dot: usize,
     ppu_scanline: usize,
     ppu_read_buffer: u8,
@@ -90,24 +87,22 @@ pub struct NES {
 
     current_frame: Frame,
     controller: Controller,
+
+    cartridge: Cartridge,
 }
 
 impl Default for NES {
     fn default() -> Self {
         Self {
             cpu_ram: [0; 2048],
-            prg_rom: vec![],
-            prg_ram: vec![0; 8192],
             cpu_cycles: 0,
             total_cpu_cycles: 0,
             cpu_registers: cpu::registers::CpuRegisters::default(),
 
-            chr_rom: vec![],
             palette_table: [0; 32],
             ppu_vram: [0; 2048],
 
             oam_data: [0; 256],
-            mirroring: ScreenMirroring::Horizontal,
             ppu_dot: 0,
             ppu_scanline: 0,
             ppu_read_buffer: 0,
@@ -118,6 +113,7 @@ impl Default for NES {
 
             current_frame: Frame::new(),
             controller: Controller::new(),
+            cartridge: Cartridge::default(),
         }
     }
 }
@@ -185,16 +181,14 @@ impl NES {
         self.ppu_dot = 21;
     }
 
-    pub fn insert_cart(&mut self, cart: cartridge::Cartridge) {
+    pub fn insert_cart(&mut self, mut cart: Cartridge) {
         assert!(
             cart.screen_mirroring != ScreenMirroring::FourScreen,
             "No four screen mirroring yet cuz it hard."
         );
 
-        self.mirroring = cart.screen_mirroring;
-
-        self.prg_rom = cart.prg_rom;
-        self.chr_rom = cart.chr_rom;
+        std::mem::swap(&mut cart.prg_ram, &mut self.cartridge.prg_ram);
+        self.cartridge = cart;
     }
 
     pub fn update_buttons(&mut self, update: impl FnOnce(&mut ButtonState)) {

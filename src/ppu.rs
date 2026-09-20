@@ -91,7 +91,7 @@ impl PPU for NES {
         match address {
             0..=0x1FFF => {
                 let result = self.ppu_read_buffer;
-                self.ppu_read_buffer = self.chr_rom[address as usize];
+                self.ppu_read_buffer = self.cartridge.ppu_read(address);
                 result
             }
             0x2000..=0x3EFF => {
@@ -107,7 +107,7 @@ impl PPU for NES {
     fn ppu_write(&mut self, value: u8) {
         let address = self.ppu_registers.address.as_u16();
         match address {
-            0..=0x1FFF => println!("attempt to write to chr rom space {}", address),
+            0..=0x1FFF => self.cartridge.ppu_write(address, value),
             0x2000..=0x3EFF => {
                 self.ppu_vram[self.mirror_vram_address(address) as usize] = value;
             }
@@ -212,7 +212,7 @@ impl PPU for NES {
         let vram_index = mirrored_vram - 0x2000;
         let name_table = vram_index / 0x0400;
 
-        match (&self.mirroring, name_table) {
+        match (&self.cartridge.screen_mirroring, name_table) {
             (ScreenMirroring::Vertical, 2) | (ScreenMirroring::Vertical, 3) => vram_index - 0x800,
             (ScreenMirroring::Horizontal, 2) => vram_index - 0x400,
             (ScreenMirroring::Horizontal, 1) => vram_index - 0x400,

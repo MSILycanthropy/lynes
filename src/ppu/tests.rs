@@ -3,13 +3,16 @@ use crate::{
     Interrupt, NES,
     cartridge::{Cartridge, ScreenMirroring},
     cpu::CPU,
+    mapper::Mapper,
 };
 
 fn cartridge(mirroring: ScreenMirroring) -> Cartridge {
     Cartridge {
         prg_rom: vec![0; 32_768],
+        prg_ram: vec![0; 8192],
         chr_rom: vec![0; 8_192],
-        mapper: 0,
+        mapper: Mapper::new(0, 32_768).unwrap(),
+        submapper: 0,
         screen_mirroring: mirroring,
     }
 }
@@ -36,6 +39,49 @@ fn read_nametable(nes: &mut NES, address: u16) -> u8 {
 fn read_palette(nes: &mut NES, address: u16) -> u8 {
     set_vram_address(nes, address);
     nes.cpu_read(0x2007)
+}
+
+#[test]
+fn cartridge_chr_reads_stay_buffered_and_rom_writes_are_ignored() {
+    let mut cart = cartridge(ScreenMirroring::Horizontal);
+    cart.chr_rom[0] = 0x12;
+    cart.chr_rom[0x1FFF] = 0x34;
+    let mut nes = NES::default();
+    nes.insert_cart(cart);
+
+    set_vram_address(&mut nes, 0);
+    assert_eq!(nes.cpu_read(0x2007), 0);
+    assert_eq!(nes.cpu_read(0x2007), 0x12);
+
+    write_vram(&mut nes, 0x1FFF, 0xFF);
+    set_vram_address(&mut nes, 0x1FFF);
+    nes.cpu_read(0x2007);
+    assert_eq!(nes.cpu_read(0x2007), 0x34);
+}
+
+#[test]
+fn renderer_reads_background_and_sprite_patterns_from_cartridge() {
+    let mut cart = cartridge(ScreenMirroring::Horizontal);
+    // Background tile 0 in bank 0 uses color 1; sprite tile 1 in bank 1 uses color 2.
+    cart.chr_rom[0..8].fill(0xFF);
+    cart.chr_rom[0x1018..0x1020].fill(0xFF);
+    let mut nes = NES::default();
+    nes.insert_cart(cart);
+    nes.ppu_write_control(0x08);
+    nes.palette_table[1] = 1;
+    nes.palette_table[0x12] = 2;
+    nes.oam_data[..4].copy_from_slice(&[16, 1, 0, 16]);
+
+    nes.render();
+
+    for (x, y, palette_index) in [(32, 32, 1), (16, 16, 2)] {
+        let offset = y * crate::frame::FRAME_STRIDE + x * 3;
+        let color = super::palette::SYSTEM_PALLETE[palette_index];
+        assert_eq!(
+            &nes.frame().data()[offset..offset + 3],
+            &[color.0, color.1, color.2]
+        );
+    }
 }
 
 #[test]

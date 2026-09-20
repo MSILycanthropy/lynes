@@ -13,7 +13,7 @@ impl NES {
         let scroll_y = self.ppu_registers.scroll.scroll_y as usize;
 
         let (first_nametable, second_nametable) = match (
-            self.mirroring.clone(),
+            self.cartridge.screen_mirroring.clone(),
             self.ppu_registers.control.name_table_address(),
         ) {
             (ScreenMirroring::Vertical, 0x2000)
@@ -31,7 +31,10 @@ impl NES {
                 &self.ppu_vram.clone()[0..0x400],
             ),
             (_, _) => {
-                panic!("Not supported mirroring type {:?}", self.mirroring);
+                panic!(
+                    "Not supported mirroring type {:?}",
+                    self.cartridge.screen_mirroring
+                );
             }
         };
 
@@ -76,13 +79,12 @@ impl NES {
             let tile_x = i % 32;
             let tile_y = i / 32;
             let tile = name_table[i] as u16;
-            let tile =
-                &self.chr_rom[(bank + tile * 16) as usize..=(bank + tile * 16 + 15) as usize];
+            let tile_address = bank + tile * 16;
             let palette = self.background_palette(attribute_table, tile_x, tile_y);
 
             for y in 0..=7 {
-                let mut high = tile[y];
-                let mut low = tile[y + 8];
+                let mut high = self.cartridge.ppu_read(tile_address + y as u16);
+                let mut low = self.cartridge.ppu_read(tile_address + y as u16 + 8);
 
                 for x in (0..=7).rev() {
                     let value = (1 & low) << 1 | 1 & high;
@@ -120,12 +122,11 @@ impl NES {
 
             let bank = self.ppu_registers.control.sprite_pattern_address_value();
 
-            let tile =
-                &self.chr_rom[(bank + tile * 16) as usize..=(bank + tile * 16 + 15) as usize];
+            let tile_address = bank + tile * 16;
 
             for y in 0..=7 {
-                let mut high = tile[y];
-                let mut low = tile[y + 8];
+                let mut high = self.cartridge.ppu_read(tile_address + y as u16);
+                let mut low = self.cartridge.ppu_read(tile_address + y as u16 + 8);
 
                 'inner: for x in (0..=7).rev() {
                     let value = (1 & low) << 1 | 1 & high;

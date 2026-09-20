@@ -112,14 +112,9 @@ pub fn run_rom(path: &str, cycle_budget: usize) -> Report {
 }
 
 fn run_cartridge(cart: Cartridge, cycle_budget: usize) -> Report {
-    // The emulator does not dispatch cartridge accesses through mappers yet.
-    // Reject unsupported layouts rather than silently testing the wrong mapping.
-    let unsupported = if cart.mapper != 0 {
-        Some(format!(
-            "mapper {} (only mapper 0 is supported by this runner)",
-            cart.mapper
-        ))
-    } else if cart.screen_mirroring == ScreenMirroring::FourScreen {
+    // Unsupported mapper IDs are rejected by the cartridge loader.
+    // These remaining layouts are not yet supported by the CPU/PPU.
+    let unsupported = if cart.screen_mirroring == ScreenMirroring::FourScreen {
         Some("four-screen mirroring".to_owned())
     } else if !matches!(cart.prg_rom.len(), 16_384 | 32_768) || cart.chr_rom.len() != 8_192 {
         Some("requires 16/32 KiB PRG ROM and 8 KiB CHR ROM; CHR RAM is not implemented".to_owned())
@@ -191,6 +186,7 @@ fn run_cartridge(cart: Cartridge, cycle_budget: usize) -> Report {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use lynes::mapper::Mapper;
 
     fn cart(program: &[u8]) -> Cartridge {
         let mut prg_rom = vec![0; 32_768];
@@ -198,8 +194,10 @@ mod tests {
         prg_rom[0x7FFC..0x7FFE].copy_from_slice(&0x8000u16.to_le_bytes());
         Cartridge {
             prg_rom,
+            prg_ram: vec![0; 8192],
             chr_rom: vec![0; 8192],
-            mapper: 0,
+            mapper: Mapper::new(0, 32_768).unwrap(),
+            submapper: 0,
             screen_mirroring: ScreenMirroring::Horizontal,
         }
     }
@@ -287,17 +285,24 @@ mod tests {
 
     #[test]
     fn unsupported_mapper_is_reported_before_execution() {
-        let mut cart = cart(&[]);
-        cart.mapper = 1;
+        let result = run_rom(
+            concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/fixtures/blargg/instr_test_v5/all_instrs.nes"
+            ),
+            100,
+        );
         assert!(matches!(
-            run_cartridge(cart, 100).outcome,
-            Outcome::UnsupportedCartridge(_)
+            result.outcome,
+            Outcome::LoadError(ref message) if message.contains("Unsupported mapper ID: 1")
         ));
+        assert_eq!(result.cpu_cycles, 0);
     }
 
     #[test]
     fn emulator_panic_is_distinct_from_rom_failure() {
-        let result = run_cartridge(cart(&[0x8D, 0x00, 0x80]), 100);
+        // LDA $4018 still reads an unsupported CPU address; NROM writes are ignored.
+        let result = run_cartridge(cart(&[0xAD, 0x18, 0x40]), 100);
         assert!(matches!(result.outcome, Outcome::EmulatorPanicked(_)));
     }
 

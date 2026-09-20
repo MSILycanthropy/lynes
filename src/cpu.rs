@@ -111,16 +111,10 @@ impl CPU for NES {
                 let mirrored_down_address = addr & 0b00100000_00000111;
                 self.cpu_read(mirrored_down_address)
             }
-            0x6000..=0x7FFF => self.prg_ram[(addr - 0x6000) as usize],
-            0x8000..=0xFFFF => {
-                let mut addr = addr - 0x8000;
-
-                if self.prg_rom.len() == 0x4000 && addr >= 0x4000 {
-                    addr %= 0x4000;
-                }
-
-                self.prg_rom[addr as usize]
-            }
+            0x4020..=0xFFFF => self
+                .cartridge
+                .cpu_read(addr)
+                .unwrap_or_else(|| panic!("Invalid CPU read address: {:#06X}", addr)),
             _ => {
                 panic!("Invalid CPU read address: {:#06X}", addr);
             }
@@ -166,13 +160,7 @@ impl CPU for NES {
             0x4018..=0x401F => {
                 // panic!("APU and I/O functionality that is normally disabled")
             }
-            0x4020..=0x05FFF => {
-                // panic!("PRG RAM and mapper registers")
-            }
-            0x6000..=0x7FFF => self.prg_ram[(addr - 0x6000) as usize] = data,
-            0x8000..=0xFFFF => {
-                panic!("Cannot write to PRG ROM!")
-            }
+            0x4020..=0xFFFF => self.cartridge.cpu_write(addr, data),
         }
     }
 

@@ -1,5 +1,10 @@
-use crate::{NES, cartridge::ScreenMirroring, frame::Frame, ppu::registers::PpuRegisters};
+use crate::{
+    NES,
+    frame::Frame,
+    ppu::{bus::PpuBus, registers::PpuRegisters},
+};
 
+pub(crate) mod bus;
 mod palette;
 pub(crate) mod registers;
 mod render;
@@ -91,21 +96,26 @@ impl Ppu {
         self.registers.scroll.write_control(data);
     }
 
+    pub(crate) fn write_data(&mut self, bus: &mut PpuBus<'_>, value: u8) {
+        let address = self.registers.scroll.memory_address();
+
+        match address {
+            0..=0x3EFF => bus.write(address, value),
+            0x3F00..=0x3FFF => {
+                self.palette_table[palette_index(address)] = value & 0x3F;
+            }
+            _ => panic!("unexpected ppu write to {address:#06X}"),
+        }
+
+        self.registers.increment_vram_address();
+    }
+
     pub(crate) fn write_mask(&mut self, data: u8) {
         self.registers.mask.update(data);
     }
 
     pub(crate) fn write_scroll(&mut self, data: u8) {
         self.registers.scroll.write_scroll(data);
-    }
-
-    pub(crate) fn read_status(&mut self) -> u8 {
-        let data = self.registers.status.into_bits();
-
-        self.registers.status.set_vblank_started(false);
-        self.registers.scroll.reset_write_toggle();
-
-        data
     }
 
     pub(crate) fn write_oam_address(&mut self, data: u8) {
@@ -115,6 +125,34 @@ impl Ppu {
     pub(crate) fn write_oam_data(&mut self, data: u8) {
         self.oam_data[self.registers.oam_addr as usize] = data;
         self.registers.oam_addr = self.registers.oam_addr.wrapping_add(1);
+    }
+
+    pub(crate) fn read_data(&mut self, bus: &mut PpuBus<'_>) -> u8 {
+        let address = self.registers.scroll.memory_address();
+
+        self.registers.increment_vram_address();
+
+        match address {
+            0..=0x3EFF => {
+                let result = self.read_buffer;
+                self.read_buffer = bus.read(address);
+                result
+            }
+            0x3F00..=0x3FFF => {
+                self.read_buffer = bus.read(address - 0x1000);
+                self.palette_table[palette_index(address)]
+            }
+            _ => panic!("unexpected ppu read at {address:#06X}"),
+        }
+    }
+
+    pub(crate) fn read_status(&mut self) -> u8 {
+        let data = self.registers.status.into_bits();
+
+        self.registers.status.set_vblank_started(false);
+        self.registers.scroll.reset_write_toggle();
+
+        data
     }
 
     pub(crate) fn read_oam_data(&self) -> u8 {
@@ -127,57 +165,15 @@ impl Ppu {
 }
 
 pub trait PPU {
-    fn ppu_read(&mut self) -> u8;
-    fn ppu_write(&mut self, value: u8);
-
     fn ppu_write_oam_dma(&mut self, buffer: &[u8; 256]);
 
     fn background_palette(&self, attribute_table: &[u8], tile_x: usize, tile_y: usize) -> [u8; 4];
     fn sprite_palette(&self, index: usize) -> [u8; 4];
-    fn mirror_vram_address(&self, address: u16) -> u16;
 
     fn is_sprite_0_hit(&self, cycle: usize) -> bool;
 }
 
 impl PPU for NES {
-    fn ppu_read(&mut self) -> u8 {
-        let address = self.bus.ppu.registers.scroll.memory_address();
-
-        self.bus.ppu.registers.increment_vram_address();
-
-        match address {
-            0..=0x1FFF => {
-                let result = self.bus.ppu.read_buffer;
-                self.bus.ppu.read_buffer = self.bus.cartridge.ppu_read(address);
-                result
-            }
-            0x2000..=0x3EFF => {
-                let result = self.bus.ppu.read_buffer;
-                self.bus.ppu.read_buffer =
-                    self.bus.ciram[self.mirror_vram_address(address) as usize];
-                result
-            }
-            0x3F00..=0x3FFF => self.bus.ppu.palette_table[palette_index(address)],
-            _ => unreachable!("attempted to access mirrored address space {}", address),
-        }
-    }
-
-    fn ppu_write(&mut self, value: u8) {
-        let address = self.bus.ppu.registers.scroll.memory_address();
-        match address {
-            0..=0x1FFF => self.bus.cartridge.ppu_write(address, value),
-            0x2000..=0x3EFF => {
-                self.bus.ciram[self.mirror_vram_address(address) as usize] = value;
-            }
-            0x3F00..=0x3FFF => {
-                self.bus.ppu.palette_table[palette_index(address)] = value & 0x3F;
-            }
-            _ => panic!("unexpected access to mirrored space {}", address),
-        }
-
-        self.bus.ppu.registers.increment_vram_address();
-    }
-
     fn ppu_write_oam_dma(&mut self, buffer: &[u8; 256]) {
         for &data in buffer {
             self.bus.ppu.write_oam_data(data);
@@ -215,20 +211,6 @@ impl PPU for NES {
             self.bus.ppu.palette_table[palette_start + 1],
             self.bus.ppu.palette_table[palette_start + 2],
         ]
-    }
-
-    fn mirror_vram_address(&self, address: u16) -> u16 {
-        let mirrored_vram = address & 0b10111111111111;
-        let vram_index = mirrored_vram - 0x2000;
-        let name_table = vram_index / 0x0400;
-
-        match (&self.bus.cartridge.screen_mirroring, name_table) {
-            (ScreenMirroring::Vertical, 2) | (ScreenMirroring::Vertical, 3) => vram_index - 0x800,
-            (ScreenMirroring::Horizontal, 2) => vram_index - 0x400,
-            (ScreenMirroring::Horizontal, 1) => vram_index - 0x400,
-            (ScreenMirroring::Horizontal, 3) => vram_index - 0x800,
-            _ => vram_index,
-        }
     }
 
     fn is_sprite_0_hit(&self, cycle: usize) -> bool {

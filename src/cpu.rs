@@ -1,4 +1,8 @@
-use crate::{Interrupt, NES, cpu::registers::CpuRegisters, ppu::PPU};
+use crate::{
+    Interrupt, NES,
+    cpu::registers::CpuRegisters,
+    ppu::{PPU, bus::PpuBus},
+};
 
 pub(crate) mod instructions;
 pub(crate) mod registers;
@@ -151,7 +155,14 @@ impl CPU for NES {
                 status
             }
             0x2004 => self.bus.ppu.read_oam_data(),
-            0x2007 => self.ppu_read(),
+            0x2007 => {
+                let mut bus = PpuBus {
+                    cartridge: &mut self.bus.cartridge,
+                    ciram: &mut self.bus.ciram,
+                };
+
+                self.bus.ppu.read_data(&mut bus)
+            }
             0x4000..=0x4015 => {
                 // panic!("APU and I/O registers are not implemented yet!")
                 0
@@ -190,7 +201,14 @@ impl CPU for NES {
             0x2004 => self.bus.ppu.write_oam_data(data),
             0x2005 => self.bus.ppu.write_scroll(data),
             0x2006 => self.bus.ppu.write_address(data),
-            0x2007 => self.ppu_write(data),
+            0x2007 => {
+                let mut bus = PpuBus {
+                    cartridge: &mut self.bus.cartridge,
+                    ciram: &mut self.bus.ciram,
+                };
+
+                self.bus.ppu.write_data(&mut bus, data)
+            }
             0x2008..=0x3FFF => {
                 let mirrored_down_address = addr & 0b00100000_00000111;
                 self.cpu_write(mirrored_down_address, data);

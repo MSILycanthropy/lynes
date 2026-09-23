@@ -34,8 +34,60 @@ impl Default for Ppu {
 }
 
 impl Ppu {
+    pub(crate) fn tick(&mut self) -> bool {
+        let rendering_enabled =
+            self.registers.mask.show_background() || self.registers.mask.show_sprite();
+
+        // TODO: Regions so that we dont hardcode NTSC
+        let frame_ready = match (self.scanline, self.dot) {
+            (261, 339) if self.odd_frame && rendering_enabled => {
+                self.scanline = 0;
+                self.dot = 0;
+                true
+            }
+            (261, 340) => {
+                self.scanline = 0;
+                self.dot = 0;
+                true
+            }
+            (_, 340) => {
+                self.scanline += 1;
+                self.dot = 0;
+                false
+            }
+
+            _ => {
+                self.dot += 1;
+
+                false
+            }
+        };
+
+        if frame_ready {
+            self.odd_frame = !self.odd_frame;
+        }
+
+        match (self.scanline, self.dot) {
+            (241, 1) => {
+                self.registers.status.set_vblank_started(true);
+            }
+            (261, 1) => {
+                self.registers.status.set_vblank_started(false);
+                self.registers.status.set_sprite_zero_hit(false);
+                self.registers.status.set_sprite_overflow(false);
+            }
+            _ => {}
+        }
+
+        return frame_ready;
+    }
+
     pub(crate) fn write_address(&mut self, data: u8) {
         self.registers.address.update(data);
+    }
+
+    pub(crate) fn write_control(&mut self, data: u8) {
+        self.registers.control.update(data);
     }
 
     pub(crate) fn write_mask(&mut self, data: u8) {
@@ -69,14 +121,16 @@ impl Ppu {
     pub(crate) fn read_oam_data(&self) -> u8 {
         self.oam_data[self.registers.oam_addr as usize]
     }
+
+    pub(crate) fn nmi_asserted(&self) -> bool {
+        self.registers.control.generate_nmi() && self.registers.status.vblank_started()
+    }
 }
 
 pub trait PPU {
-    fn tick_ppu(&mut self) -> bool;
     fn ppu_read(&mut self) -> u8;
     fn ppu_write(&mut self, value: u8);
 
-    fn ppu_write_control(&mut self, data: u8);
     fn ppu_write_oam_dma(&mut self, buffer: &[u8; 256]);
 
     fn background_palette(&self, attribute_table: &[u8], tile_x: usize, tile_y: usize) -> [u8; 4];
@@ -87,58 +141,6 @@ pub trait PPU {
 }
 
 impl PPU for NES {
-    fn tick_ppu(&mut self) -> bool {
-        let rendering_enabled = self.bus.ppu.registers.mask.show_background()
-            || self.bus.ppu.registers.mask.show_sprite();
-
-        // TODO: Regions so that we dont hardcode NTSC
-        let frame_ready = match (self.bus.ppu.scanline, self.bus.ppu.dot) {
-            (261, 339) if self.bus.ppu.odd_frame && rendering_enabled => {
-                self.bus.ppu.scanline = 0;
-                self.bus.ppu.dot = 0;
-                true
-            }
-            (261, 340) => {
-                self.bus.ppu.scanline = 0;
-                self.bus.ppu.dot = 0;
-                true
-            }
-            (_, 340) => {
-                self.bus.ppu.scanline += 1;
-                self.bus.ppu.dot = 0;
-                false
-            }
-
-            _ => {
-                self.bus.ppu.dot += 1;
-
-                false
-            }
-        };
-
-        if frame_ready {
-            self.bus.ppu.odd_frame = !self.bus.ppu.odd_frame;
-        }
-
-        match (self.bus.ppu.scanline, self.bus.ppu.dot) {
-            (241, 1) => {
-                self.bus.ppu.registers.status.set_vblank_started(true);
-
-                if self.bus.ppu.registers.control.generate_nmi() {
-                    self.interrupt_state.nmi_pending = true;
-                }
-            }
-            (261, 1) => {
-                self.bus.ppu.registers.status.set_vblank_started(false);
-                self.bus.ppu.registers.status.set_sprite_zero_hit(false);
-                self.bus.ppu.registers.status.set_sprite_overflow(false);
-            }
-            _ => {}
-        }
-
-        return frame_ready;
-    }
-
     fn ppu_read(&mut self) -> u8 {
         let address = self.bus.ppu.registers.address.as_u16();
 
@@ -175,19 +177,6 @@ impl PPU for NES {
         }
 
         self.bus.ppu.registers.increment_vram_address();
-    }
-
-    fn ppu_write_control(&mut self, data: u8) {
-        let nmi_status_before = self.bus.ppu.registers.control.generate_nmi();
-
-        self.bus.ppu.registers.control.update(data);
-
-        let nmi_status_after = self.bus.ppu.registers.control.generate_nmi();
-
-        if !nmi_status_before && nmi_status_after && self.bus.ppu.registers.status.vblank_started()
-        {
-            self.interrupt_state.nmi_pending = true;
-        }
     }
 
     fn ppu_write_oam_dma(&mut self, buffer: &[u8; 256]) {

@@ -10,7 +10,6 @@ pub mod ppu;
 pub mod tv;
 
 use cpu::{AddrMode, CPU};
-use ppu::PPU;
 
 use crate::{
     bus::CpuBus,
@@ -35,27 +34,6 @@ impl Interrupt {
     }
 }
 
-#[derive(Default, Copy, Clone)]
-struct InterruptState {
-    nmi_pending: bool,
-    irq_asserted: bool,
-}
-
-impl InterruptState {
-    fn take(&mut self, interrupt_disable: bool) -> Option<Interrupt> {
-        if self.nmi_pending {
-            self.nmi_pending = false;
-            return Some(Interrupt::NMI);
-        }
-
-        if self.irq_asserted && !interrupt_disable {
-            return Some(Interrupt::IRQ);
-        }
-
-        None
-    }
-}
-
 pub enum StepKind {
     Instructrion { pc: u16, opcode: u8 },
     Interrupt(Interrupt),
@@ -72,8 +50,6 @@ pub struct NES {
     total_cpu_cycles: usize,
     pub cpu: Cpu,
     pub bus: CpuBus,
-
-    interrupt_state: InterruptState,
 }
 
 impl Default for NES {
@@ -83,8 +59,6 @@ impl Default for NES {
             total_cpu_cycles: 0,
             cpu: Cpu::default(),
             bus: CpuBus::default(),
-
-            interrupt_state: InterruptState::default(),
         }
     }
 }
@@ -116,7 +90,8 @@ impl NES {
             self.total_cpu_cycles += 1;
 
             for _ in 0..3 {
-                frame_ready |= self.tick_ppu();
+                frame_ready |= self.bus.ppu.tick();
+                self.sample_interrupt_line();
             }
         }
 
@@ -124,9 +99,7 @@ impl NES {
     }
 
     fn execute_cpu_action(&mut self) -> (StepKind, usize) {
-        let interrupt_disable = self.cpu.registers.status.interrupt_disable();
-
-        if let Some(interrupt) = self.interrupt_state.take(interrupt_disable) {
+        if let Some(interrupt) = self.cpu.take_interrupt() {
             let cycles = self.enter_interrupt(&interrupt);
 
             return (StepKind::Interrupt(interrupt), cycles);
@@ -163,6 +136,11 @@ impl NES {
 
     pub fn update_buttons(&mut self, update: impl FnOnce(&mut ButtonState)) {
         update(&mut self.bus.controller.button_state);
+    }
+
+    fn sample_interrupt_line(&mut self) {
+        let nmi_asserted = self.bus.ppu.nmi_asserted();
+        self.cpu.sample_nmi_input(nmi_asserted);
     }
 
     // Returns the address and if a page boundary was crossed

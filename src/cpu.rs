@@ -21,8 +21,50 @@ pub enum AddrMode {
 }
 
 #[derive(Default)]
+struct InterruptState {
+    previous_nmi: bool,
+    nmi_pending: bool,
+    irq_asserted: bool,
+}
+
+impl InterruptState {
+    fn sample_nmi(&mut self, asserted: bool) {
+        if asserted && !self.previous_nmi {
+            self.nmi_pending = true;
+        }
+
+        self.previous_nmi = asserted;
+    }
+
+    fn take(&mut self, interrupt_disable: bool) -> Option<Interrupt> {
+        if self.nmi_pending {
+            self.nmi_pending = false;
+            return Some(Interrupt::NMI);
+        }
+
+        if self.irq_asserted && !interrupt_disable {
+            return Some(Interrupt::IRQ);
+        }
+
+        None
+    }
+}
+
+#[derive(Default)]
 pub struct Cpu {
     pub registers: CpuRegisters,
+    interrupt_state: InterruptState,
+}
+
+impl Cpu {
+    pub(crate) fn sample_nmi_input(&mut self, nmi_asserted: bool) {
+        self.interrupt_state.sample_nmi(nmi_asserted);
+    }
+
+    pub(crate) fn take_interrupt(&mut self) -> Option<Interrupt> {
+        self.interrupt_state
+            .take(self.registers.status.interrupt_disable())
+    }
 }
 
 pub trait CPU {
@@ -103,7 +145,11 @@ impl CPU for NES {
                 // panic!("attempted to read from write-only PPU address {:x}", addr);
                 0
             }
-            0x2002 => self.bus.ppu.read_status(),
+            0x2002 => {
+                let status = self.bus.ppu.read_status();
+                self.sample_interrupt_line();
+                status
+            }
             0x2004 => self.bus.ppu.read_oam_data(),
             0x2007 => self.ppu_read(),
             0x4000..=0x4015 => {
@@ -134,7 +180,10 @@ impl CPU for NES {
 
                 self.bus.ram[mirrored_addr as usize] = data;
             }
-            0x2000 => self.ppu_write_control(data),
+            0x2000 => {
+                self.bus.ppu.write_control(data);
+                self.sample_interrupt_line();
+            }
             0x2001 => self.bus.ppu.write_mask(data),
             0x2002 => {} // Writes dont change PPUSTATUS, but we do have tests that.. well test that.
             0x2003 => self.bus.ppu.write_oam_address(data),
@@ -186,5 +235,55 @@ impl CPU for NES {
         let cycles = instruction.execute(self);
 
         (instruction.size(), cycles)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nmi_latches_edges_until_consumed_even_when_interrupts_are_disabled() {
+        let mut cpu = Cpu::default();
+        cpu.registers.status.set_interrupt_disable(true);
+
+        cpu.sample_nmi_input(false);
+        assert!(cpu.take_interrupt().is_none());
+
+        cpu.sample_nmi_input(true);
+        cpu.sample_nmi_input(false);
+        assert!(matches!(cpu.take_interrupt(), Some(Interrupt::NMI)));
+        assert!(cpu.take_interrupt().is_none());
+
+        cpu.sample_nmi_input(true);
+        assert!(matches!(cpu.take_interrupt(), Some(Interrupt::NMI)));
+        cpu.sample_nmi_input(true);
+        assert!(cpu.take_interrupt().is_none());
+
+        cpu.sample_nmi_input(false);
+        cpu.sample_nmi_input(true);
+        assert!(matches!(cpu.take_interrupt(), Some(Interrupt::NMI)));
+    }
+
+    #[test]
+    fn irq_respects_mask_and_remains_asserted_after_nmi_service() {
+        let mut cpu = Cpu::default();
+        cpu.interrupt_state.irq_asserted = true;
+        cpu.registers.status.set_interrupt_disable(true);
+        assert!(cpu.take_interrupt().is_none());
+
+        cpu.sample_nmi_input(true);
+        cpu.sample_nmi_input(false);
+        assert!(matches!(cpu.take_interrupt(), Some(Interrupt::NMI)));
+        assert!(cpu.take_interrupt().is_none());
+
+        cpu.registers.status.set_interrupt_disable(false);
+        cpu.sample_nmi_input(true);
+        assert!(matches!(cpu.take_interrupt(), Some(Interrupt::NMI)));
+        assert!(matches!(cpu.take_interrupt(), Some(Interrupt::IRQ)));
+        assert!(matches!(cpu.take_interrupt(), Some(Interrupt::IRQ)));
+
+        cpu.interrupt_state.irq_asserted = false;
+        assert!(cpu.take_interrupt().is_none());
     }
 }

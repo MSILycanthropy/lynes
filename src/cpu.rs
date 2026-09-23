@@ -1,8 +1,4 @@
-use crate::{
-    Interrupt, NES,
-    cpu::registers::CpuRegisters,
-    ppu::{PPU, bus::PpuBus},
-};
+use crate::{Interrupt, NES, cpu::registers::CpuRegisters, ppu::bus::PpuBus};
 
 pub(crate) mod instructions;
 pub(crate) mod registers;
@@ -221,7 +217,7 @@ impl CPU for NES {
                     buffer[i as usize] = self.cpu_read(high + i);
                 }
 
-                self.ppu_write_oam_dma(&buffer)
+                self.bus.ppu.write_oam_dma(&buffer)
             }
             0x4000..=0x4015 => {
                 // panic!("APU and I/O registers are not implemented yet!")

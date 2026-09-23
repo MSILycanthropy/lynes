@@ -1,5 +1,4 @@
 use crate::{
-    NES,
     frame::Frame,
     ppu::{bus::PpuBus, registers::PpuRegisters},
 };
@@ -127,6 +126,12 @@ impl Ppu {
         self.registers.oam_addr = self.registers.oam_addr.wrapping_add(1);
     }
 
+    pub(crate) fn write_oam_dma(&mut self, buffer: &[u8; 256]) {
+        for &data in buffer {
+            self.write_oam_data(data);
+        }
+    }
+
     pub(crate) fn read_data(&mut self, bus: &mut PpuBus<'_>) -> u8 {
         let address = self.registers.scroll.memory_address();
 
@@ -162,23 +167,6 @@ impl Ppu {
     pub(crate) fn nmi_asserted(&self) -> bool {
         self.registers.control.generate_nmi() && self.registers.status.vblank_started()
     }
-}
-
-pub trait PPU {
-    fn ppu_write_oam_dma(&mut self, buffer: &[u8; 256]);
-
-    fn background_palette(&self, attribute_table: &[u8], tile_x: usize, tile_y: usize) -> [u8; 4];
-    fn sprite_palette(&self, index: usize) -> [u8; 4];
-
-    fn is_sprite_0_hit(&self, cycle: usize) -> bool;
-}
-
-impl PPU for NES {
-    fn ppu_write_oam_dma(&mut self, buffer: &[u8; 256]) {
-        for &data in buffer {
-            self.bus.ppu.write_oam_data(data);
-        }
-    }
 
     fn background_palette(&self, attribute_table: &[u8], tile_x: usize, tile_y: usize) -> [u8; 4] {
         let attribute_table_index = tile_y / 4 * 8 + tile_x / 4;
@@ -194,32 +182,23 @@ impl PPU for NES {
         let palette_start = palette_table_index * 4 + 1;
 
         [
-            self.bus.ppu.palette_table[0],
-            self.bus.ppu.palette_table[palette_start],
-            self.bus.ppu.palette_table[palette_start + 1],
-            self.bus.ppu.palette_table[palette_start + 2],
+            self.palette_table[0],
+            self.palette_table[palette_start],
+            self.palette_table[palette_start + 1],
+            self.palette_table[palette_start + 2],
         ]
     }
 
     fn sprite_palette(&self, index: usize) -> [u8; 4] {
-        let palette_index = self.bus.ppu.oam_data[index + 2] & 0b11;
+        let palette_index = self.oam_data[index + 2] & 0b11;
         let palette_start = 0x11 + (palette_index * 4) as usize;
 
         [
             0,
-            self.bus.ppu.palette_table[palette_start],
-            self.bus.ppu.palette_table[palette_start + 1],
-            self.bus.ppu.palette_table[palette_start + 2],
+            self.palette_table[palette_start],
+            self.palette_table[palette_start + 1],
+            self.palette_table[palette_start + 2],
         ]
-    }
-
-    fn is_sprite_0_hit(&self, cycle: usize) -> bool {
-        let y = self.bus.ppu.oam_data[0] as usize;
-        let x = self.bus.ppu.oam_data[3] as usize;
-
-        (y == self.bus.ppu.scanline as usize)
-            && x <= cycle
-            && self.bus.ppu.registers.mask.show_sprite()
     }
 }
 

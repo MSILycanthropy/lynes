@@ -1,4 +1,4 @@
-use crate::{NES, cartridge::ScreenMirroring, ppu::PPU};
+use crate::{NES, cartridge::ScreenMirroring};
 
 use super::palette;
 
@@ -82,7 +82,10 @@ impl NES {
             let tile_y = i / 32;
             let tile = name_table[i] as u16;
             let tile_address = bank + tile * 16;
-            let palette = self.background_palette(attribute_table, tile_x, tile_y);
+            let palette = self
+                .bus
+                .ppu
+                .background_palette(attribute_table, tile_x, tile_y);
 
             for y in 0..=7 {
                 let mut high = self.bus.cartridge.ppu_read(tile_address + y as u16);
@@ -120,7 +123,7 @@ impl NES {
             let flip_vertical = self.bus.ppu.oam_data[i + 2] >> 7 & 1 == 1;
             let flip_horizontal = self.bus.ppu.oam_data[i + 2] >> 6 & 1 == 1;
 
-            let palette = self.sprite_palette(i);
+            let palette = self.bus.ppu.sprite_palette(i);
 
             let bank = self
                 .bus

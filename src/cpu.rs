@@ -162,34 +162,27 @@ impl Cpu {
     }
 }
 
-pub trait CPU {
-    fn execute_next_instruction(&mut self) -> (u16, u8, usize);
+impl Cpu {
+    pub(crate) fn execute_next_instruction(&mut self, bus: &mut CpuBus) -> (u16, u8, usize) {
+        let pc = self.registers.program_counter;
+        let opcode = self.read(bus, pc);
+        self.registers.program_counter = pc.wrapping_add(1);
 
-    fn execute_instruction(&mut self, opcode: u8) -> (u16, usize);
-}
+        let old_program_counter = self.registers.program_counter;
 
-impl CPU for NES {
-    fn execute_next_instruction(&mut self) -> (u16, u8, usize) {
-        let pc = self.cpu.registers.program_counter;
-        let opcode = self.cpu_read(pc);
-        self.cpu.registers.program_counter = pc.wrapping_add(1);
+        let (length, cycles) = self.execute_instruction(bus, opcode);
 
-        let old_program_counter = self.cpu.registers.program_counter;
-
-        let (length, cycles) = self.execute_instruction(opcode);
-
-        if old_program_counter == self.cpu.registers.program_counter {
-            self.cpu.registers.program_counter =
-                self.cpu.registers.program_counter.wrapping_add(length);
+        if old_program_counter == self.registers.program_counter {
+            self.registers.program_counter = self.registers.program_counter.wrapping_add(length);
         }
 
         (pc, opcode, cycles)
     }
 
-    fn execute_instruction(&mut self, opcode: u8) -> (u16, usize) {
+    fn execute_instruction(&mut self, bus: &mut CpuBus, opcode: u8) -> (u16, usize) {
         let instruction = &instructions::INSTRUCTIONS_TABLE[opcode as usize];
 
-        let cycles = instruction.execute(self);
+        let cycles = instruction.execute(self, bus);
 
         (instruction.size(), cycles)
     }

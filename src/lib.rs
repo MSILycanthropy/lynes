@@ -8,7 +8,7 @@ pub mod mapper;
 pub mod ppu;
 pub mod tv;
 
-use cpu::{AddrMode, CPU};
+use cpu::AddrMode;
 
 use crate::{
     cartridge::{Cartridge, ScreenMirroring},
@@ -104,7 +104,7 @@ impl NES {
             return (StepKind::Interrupt(interrupt), cycles);
         }
 
-        let (pc, opcode, cycles) = self.execute_next_instruction();
+        let (pc, opcode, cycles) = self.cpu.execute_next_instruction(&mut self.bus);
 
         (StepKind::Instructrion { pc, opcode }, cycles)
     }

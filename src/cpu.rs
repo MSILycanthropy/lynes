@@ -6,6 +6,7 @@ use crate::{
     },
 };
 
+mod addressing;
 pub mod bus;
 pub(crate) mod instructions;
 pub(crate) mod registers;

@@ -1,4 +1,3 @@
-pub mod bus;
 pub mod cartridge;
 pub mod cpu;
 pub mod frame;
@@ -12,9 +11,9 @@ pub mod tv;
 use cpu::{AddrMode, CPU};
 
 use crate::{
-    bus::CpuBus,
     cartridge::{Cartridge, ScreenMirroring},
     cpu::Cpu,
+    cpu::bus::CpuBus,
     frame::Frame,
     input::ButtonState,
 };

@@ -1,5 +1,9 @@
-use crate::{Interrupt, NES, cpu::registers::CpuRegisters, ppu::bus::PpuBus};
+use crate::{
+    Interrupt, NES,
+    cpu::{bus::WriteEffect, registers::CpuRegisters},
+};
 
+pub mod bus;
 pub(crate) mod instructions;
 pub(crate) mod registers;
 
@@ -71,8 +75,8 @@ pub trait CPU {
     fn enter_interrupt(&mut self, interrupt: &Interrupt) -> usize;
     fn execute_next_instruction(&mut self) -> (u16, u8, usize);
 
-    fn cpu_read(&mut self, addr: u16) -> u8;
-    fn cpu_write(&mut self, addr: u16, data: u8);
+    fn cpu_read(&mut self, address: u16) -> u8;
+    fn cpu_write(&mut self, address: u16, value: u8);
     fn cpu_read_u16(&mut self, addr: u16) -> u16 {
         let low = self.cpu_read(addr);
         let high = self.cpu_read(addr + 1);
@@ -134,102 +138,36 @@ impl CPU for NES {
         (pc, opcode, cycles)
     }
 
-    fn cpu_read(&mut self, addr: u16) -> u8 {
-        match addr {
-            0x0000..=0x1FFF => {
-                let mirrored_addr = addr & 0b00000111_11111111;
+    fn cpu_read(&mut self, address: u16) -> u8 {
+        let value = self.bus.read(address);
 
-                self.bus.ram[mirrored_addr as usize]
-            }
-            0x2000 | 0x2001 | 0x2003 | 0x2005 | 0x2006 | 0x4014 => {
-                // panic!("attempted to read from write-only PPU address {:x}", addr);
-                0
-            }
-            0x2002 => {
-                let status = self.bus.ppu.read_status();
-                self.sample_interrupt_line();
-                status
-            }
-            0x2004 => self.bus.ppu.read_oam_data(),
-            0x2007 => {
-                let mut bus = PpuBus {
-                    cartridge: &mut self.bus.cartridge,
-                    ciram: &mut self.bus.ciram,
-                };
-
-                self.bus.ppu.read_data(&mut bus)
-            }
-            0x4000..=0x4015 => {
-                // panic!("APU and I/O registers are not implemented yet!")
-                0
-            }
-            0x4016 => self.bus.controller.read(),
-            0x4017 => 0,
-            0x2008..=0x3FFF => {
-                let mirrored_down_address = addr & 0b00100000_00000111;
-                self.cpu_read(mirrored_down_address)
-            }
-            0x4020..=0xFFFF => self
-                .bus
-                .cartridge
-                .cpu_read(addr)
-                .unwrap_or_else(|| panic!("Invalid CPU read address: {:#06X}", addr)),
-            _ => {
-                panic!("Invalid CPU read address: {:#06X}", addr);
-            }
+        // Preserve the current sampling workaround, including PPUSTATUS mirrors,
+        // until interrupt sampling moves into the CPU cycle clocking path.
+        if (0x2000..=0x3FFF).contains(&address) && address & 0b111 == 2 {
+            self.sample_interrupt_line();
         }
+
+        value
     }
 
-    fn cpu_write(&mut self, addr: u16, data: u8) {
-        match addr {
-            0x0000..=0x1FFF => {
-                let mirrored_addr = addr & 0b00000111_11111111;
+    fn cpu_write(&mut self, address: u16, value: u8) {
+        let effect = self.bus.write(address, value);
 
-                self.bus.ram[mirrored_addr as usize] = data;
-            }
-            0x2000 => {
-                self.bus.ppu.write_control(data);
-                self.sample_interrupt_line();
-            }
-            0x2001 => self.bus.ppu.write_mask(data),
-            0x2002 => {} // Writes dont change PPUSTATUS, but we do have tests that.. well test that.
-            0x2003 => self.bus.ppu.write_oam_address(data),
-            0x2004 => self.bus.ppu.write_oam_data(data),
-            0x2005 => self.bus.ppu.write_scroll(data),
-            0x2006 => self.bus.ppu.write_address(data),
-            0x2007 => {
-                let mut bus = PpuBus {
-                    cartridge: &mut self.bus.cartridge,
-                    ciram: &mut self.bus.ciram,
-                };
+        // Preserve the current sampling workaround, including PPUCTRL mirrors,
+        // until interrupt sampling moves into the CPU cycle clocking path.
+        if (0x2000..=0x3FFF).contains(&address) && address & 0b111 == 0 {
+            self.sample_interrupt_line();
+        }
 
-                self.bus.ppu.write_data(&mut bus, data)
-            }
-            0x2008..=0x3FFF => {
-                let mirrored_down_address = addr & 0b00100000_00000111;
-                self.cpu_write(mirrored_down_address, data);
-            }
-            0x4014 => {
-                let mut buffer = [0u8; 256];
-                let high = (data as u16) << 8;
+        if let WriteEffect::OamDma { page } = effect {
+            let mut buffer = [0; 256];
+            let start = u16::from(page) << 8;
 
-                for i in 0..256u16 {
-                    buffer[i as usize] = self.cpu_read(high + i);
-                }
+            for offset in 0..256u16 {
+                buffer[offset as usize] = self.cpu_read(start + offset);
+            }
 
-                self.bus.ppu.write_oam_dma(&buffer)
-            }
-            0x4000..=0x4015 => {
-                // panic!("APU and I/O registers are not implemented yet!")
-            }
-            0x4016 => self.bus.controller.write(data),
-            0x4017 => {
-                // ignore controller 2
-            }
-            0x4018..=0x401F => {
-                // panic!("APU and I/O functionality that is normally disabled")
-            }
-            0x4020..=0xFFFF => self.bus.cartridge.cpu_write(addr, data),
+            self.bus.ppu.write_oam_dma(&buffer);
         }
     }
 

@@ -134,25 +134,35 @@ impl Ppu {
 
     pub(crate) fn read_data(&mut self, bus: &mut PpuBus<'_>) -> u8 {
         let address = self.registers.scroll.memory_address();
+        let result = self.peek_data();
 
         self.registers.increment_vram_address();
 
         match address {
             0..=0x3EFF => {
-                let result = self.read_buffer;
                 self.read_buffer = bus.read(address);
-                result
             }
             0x3F00..=0x3FFF => {
                 self.read_buffer = bus.read(address - 0x1000);
-                self.palette_table[palette_index(address)]
             }
             _ => panic!("unexpected ppu read at {address:#06X}"),
+        }
+
+        result
+    }
+
+    pub(crate) fn peek_data(&self) -> u8 {
+        let address = self.registers.scroll.memory_address();
+
+        match address {
+            0..=0x3EFF => self.read_buffer,
+            0x3F00..=0x3FFF => self.palette_table[palette_index(address)],
+            _ => panic!("unexpected ppu peek at {address:#06X}"),
         }
     }
 
     pub(crate) fn read_status(&mut self) -> u8 {
-        let data = self.registers.status.into_bits();
+        let data = self.peek_status();
 
         self.registers.status.set_vblank_started(false);
         self.registers.scroll.reset_write_toggle();
@@ -160,7 +170,15 @@ impl Ppu {
         data
     }
 
+    pub(crate) fn peek_status(&self) -> u8 {
+        self.registers.status.into_bits()
+    }
+
     pub(crate) fn read_oam_data(&self) -> u8 {
+        self.peek_oam_data()
+    }
+
+    pub(crate) fn peek_oam_data(&self) -> u8 {
         self.oam_data[self.registers.oam_addr as usize]
     }
 

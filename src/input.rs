@@ -45,17 +45,42 @@ impl Controller {
         }
     }
 
-    pub fn read(&mut self) -> u8 {
+    pub fn peek(&self) -> u8 {
         if self.button_index > 7 {
             return 1;
         }
 
-        let response = (self.button_state.bits() & (1 << self.button_index)) >> self.button_index;
+        (self.button_state.bits() & (1 << self.button_index)) >> self.button_index
+    }
+
+    pub fn read(&mut self) -> u8 {
+        let response = self.peek();
 
         if !self.strobe && self.button_index <= 7 {
             self.button_index += 1;
         }
 
         response
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Controller;
+
+    #[test]
+    fn peeking_does_not_consume_controller_bits() {
+        let mut controller = Controller::new();
+        controller.button_state.set_a(true);
+        controller.write(1);
+        assert_eq!(controller.peek(), 1);
+        assert_eq!(controller.read(), 1);
+        controller.write(0);
+
+        for expected in [1, 0, 0, 0, 0, 0, 0, 0, 1, 1] {
+            assert_eq!(controller.peek(), expected);
+            assert_eq!(controller.peek(), expected);
+            assert_eq!(controller.read(), expected);
+        }
     }
 }

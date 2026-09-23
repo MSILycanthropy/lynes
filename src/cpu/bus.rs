@@ -71,6 +71,33 @@ impl CpuBus {
         }
     }
 
+    /// Returns the current read value without changing device state or advancing time.
+    pub fn peek(&self, address: u16) -> u8 {
+        match address {
+            0x0000..=0x1FFF => self.ram[(address & 0x07FF) as usize],
+            0x2000 | 0x2001 | 0x2003 | 0x2005 | 0x2006 => 0,
+            0x2002 => self.ppu.peek_status(),
+            0x2004 => self.ppu.peek_oam_data(),
+            0x2007 => self.ppu.peek_data(),
+            0x2008..=0x3FFF => self.peek(address & 0x2007),
+            0x4000..=0x4015 => 0,
+            0x4016 => self.controller.peek(),
+            0x4017 => 0,
+            0x4020..=0xFFFF => self
+                .cartridge
+                .cpu_read(address)
+                .unwrap_or_else(|| panic!("Invalid CPU peek address: {address:#06X}")),
+            _ => panic!("Invalid CPU peek address: {address:#06X}"),
+        }
+    }
+
+    pub fn peek_u16(&self, address: u16) -> u16 {
+        let low = self.peek(address);
+        let high = self.peek(address.wrapping_add(1));
+
+        u16::from_le_bytes([low, high])
+    }
+
     pub fn write(&mut self, address: u16, value: u8) -> WriteEffect {
         match address {
             0x0000..=0x1FFF => {
@@ -116,5 +143,52 @@ impl CpuBus {
 
     pub(crate) fn nmi_asserted(&self) -> bool {
         self.ppu.nmi_asserted()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CpuBus;
+
+    #[test]
+    fn ppu_peeks_preserve_status_scroll_and_data_buffer() {
+        let mut bus = CpuBus::default();
+        bus.ppu.registers.status.set_vblank_started(true);
+        bus.write(0x2005, 0x12);
+        assert_eq!(bus.peek(0x2002), 0x80);
+        assert_eq!(bus.peek(0x3FFA), 0x80);
+        bus.write(0x2005, 0x34);
+        assert_eq!(bus.ppu.registers.scroll.scroll_x(), 0x12);
+        assert_eq!(bus.ppu.registers.scroll.scroll_y(), 0x34);
+        assert_eq!(bus.read(0x2002), 0x80);
+        assert_eq!(bus.peek(0x2002), 0);
+
+        bus.write(0x2006, 0x20);
+        bus.write(0x2006, 0x00);
+        bus.ppu.read_buffer = 0xAB;
+        bus.ciram[0] = 0xCD;
+        assert_eq!(bus.peek(0x2007), 0xAB);
+        assert_eq!(bus.peek(0x3FFF), 0xAB);
+        assert_eq!(bus.ppu.registers.scroll.memory_address(), 0x2000);
+        assert_eq!(bus.read(0x2007), 0xAB);
+        assert_eq!(bus.peek(0x2007), 0xCD);
+
+        bus.write(0x2006, 0x3F);
+        bus.write(0x2006, 0x10);
+        bus.ppu.palette_table[0] = 0x23;
+        assert_eq!(bus.peek(0x2007), 0x23);
+        assert_eq!(bus.ppu.read_buffer, 0xCD);
+        assert_eq!(bus.ppu.registers.scroll.memory_address(), 0x3F10);
+    }
+
+    #[test]
+    fn peeks_use_memory_mapping_and_wrap_u16_reads() {
+        let mut bus = CpuBus::default();
+        bus.cartridge.prg_rom = vec![0; 0x4000];
+        bus.cartridge.prg_rom[0x3FFF] = 0x34;
+        bus.write(0x0000, 0x12);
+        assert_eq!(bus.peek(0x1800), 0x12);
+        assert_eq!(bus.peek(0xBFFF), 0x34);
+        assert_eq!(bus.peek_u16(0xFFFF), 0x1234);
     }
 }

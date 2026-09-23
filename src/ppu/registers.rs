@@ -1,10 +1,9 @@
 use bitfield_struct::bitfield;
 
 pub struct PpuRegisters {
-    pub address: Address,
+    pub scroll: ScrollState,
     pub control: Control,
     pub status: Status,
-    pub scroll: Scroll,
     pub mask: Mask,
 
     pub oam_addr: u8,
@@ -13,10 +12,9 @@ pub struct PpuRegisters {
 impl Default for PpuRegisters {
     fn default() -> Self {
         Self {
-            address: Address::default(),
+            scroll: ScrollState::default(),
             control: Control::new(),
             status: Status::new(),
-            scroll: Scroll::default(),
             mask: Mask::new(),
 
             oam_addr: 0,
@@ -26,73 +24,101 @@ impl Default for PpuRegisters {
 
 impl PpuRegisters {
     pub fn increment_vram_address(&mut self) {
-        self.address
-            .increment(self.control.vram_address_increment_amount());
+        let amount = self.control.vram_address_increment_amount();
+
+        self.scroll.increment_address(amount);
     }
 }
 
-pub struct Address {
-    high: u8,
-    low: u8,
-    latch: bool,
+#[derive(Default)]
+pub struct ScrollState {
+    current_address: u16,   // v
+    temporary_address: u16, // t
+    fine_x: u8,
+    write_toggle: bool,
 }
 
-impl Default for Address {
-    fn default() -> Self {
-        Self {
-            high: 0,
-            low: 0,
-            latch: true,
-        }
-    }
-}
+impl ScrollState {
+    pub fn write_control(&mut self, data: u8) {
+        const NAMETABLE_MASK: u16 = 0x03 << 10;
 
-impl Address {
-    fn set(&mut self, data: u16) {
-        self.high = (data >> 8) as u8;
-        self.low = (data & 0xFF) as u8;
+        let preserved = self.temporary_address & !NAMETABLE_MASK;
+        let nametable_bits = u16::from(data & 0x03) << 10;
+
+        self.temporary_address = preserved | nametable_bits;
     }
 
-    fn mirror_down(&mut self) {
-        if self.as_u16() <= 0x3FFF {
-            return;
-        }
+    pub fn write_scroll(&mut self, data: u8) {
+        const COARSE_X_MASK: u16 = 0x1F;
+        const COARSE_Y_MASK: u16 = 0x1F << 5;
+        const FINE_Y_MASK: u16 = 0x07 << 12;
 
-        self.set(self.as_u16() & 0b01111111_11111111)
-    }
+        let coarse = u16::from(data >> 3);
+        let fine = data & 0x07;
 
-    fn flip_latch(&mut self) {
-        self.latch = !self.latch
-    }
+        if self.write_toggle {
+            let coarse_y = coarse << 5;
+            let fine_y = u16::from(fine) << 12;
 
-    pub fn update(&mut self, data: u8) {
-        if self.latch {
-            self.high = data;
+            let preserved = self.temporary_address & !(COARSE_Y_MASK | FINE_Y_MASK);
+            self.temporary_address = preserved | coarse_y | fine_y;
         } else {
-            self.low = data;
+            let coarse_x = coarse;
+            let preserved = self.temporary_address & !COARSE_X_MASK;
+
+            self.temporary_address = preserved | coarse_x;
+            self.fine_x = fine;
         }
 
-        self.mirror_down();
-        self.flip_latch();
+        self.write_toggle = !self.write_toggle;
     }
 
-    pub fn increment(&mut self, amt: u8) {
-        let original_low = self.low;
-        self.low = self.low.wrapping_add(amt);
+    pub fn write_address(&mut self, data: u8) {
+        if self.write_toggle {
+            let preserved = self.temporary_address & 0x7F00;
+            let overwrite = u16::from(data);
 
-        if original_low > self.low {
-            self.high = self.high.wrapping_add(1);
+            self.temporary_address = preserved | overwrite;
+            self.current_address = self.temporary_address;
+        } else {
+            let preserved = self.temporary_address & 0xFF;
+            let overwrite = u16::from(data & 0x3F) << 8;
+
+            self.temporary_address = preserved | overwrite;
         }
 
-        self.mirror_down();
+        self.write_toggle = !self.write_toggle;
     }
 
-    pub fn reset_latch(&mut self) {
-        self.latch = true;
+    pub fn memory_address(&self) -> u16 {
+        self.current_address & 0x3FFF
     }
 
-    pub fn as_u16(&self) -> u16 {
-        ((self.high as u16) << 8) | (self.low as u16)
+    pub fn increment_address(&mut self, amount: u8) {
+        self.current_address = self.current_address.wrapping_add(u16::from(amount)) & 0x7FFF;
+    }
+
+    pub fn reset_write_toggle(&mut self) {
+        self.write_toggle = false;
+    }
+
+    pub fn scroll_x(&self) -> u8 {
+        let coarse_x = self.temporary_address & 0x1F;
+
+        (coarse_x as u8) * 8 + self.fine_x
+    }
+
+    pub fn scroll_y(&self) -> u8 {
+        let coarse_y = (self.temporary_address >> 5) & 0x1F;
+        let fine_y = (self.temporary_address >> 12) & 0x07;
+
+        (coarse_y as u8) * 8 + fine_y as u8
+    }
+
+    pub fn name_table_address(&self) -> u16 {
+        const NAMETABLE_MASK: u16 = 0x03 << 10;
+
+        0x2000 | (self.temporary_address & NAMETABLE_MASK)
     }
 }
 
@@ -140,11 +166,7 @@ impl Control {
     }
 
     pub fn vram_address_increment_amount(&self) -> u8 {
-        if self.vram_address_increment() {
-            32
-        } else {
-            1
-        }
+        if self.vram_address_increment() { 32 } else { 1 }
     }
 
     pub fn background_pattern_address_value(&self) -> u16 {
@@ -186,30 +208,6 @@ pub struct Status {
     pub vblank_started: bool,
 }
 
-#[derive(Default)]
-pub struct Scroll {
-    pub scroll_x: u8,
-    pub scroll_y: u8,
-
-    pub latch: bool,
-}
-
-impl Scroll {
-    pub fn update(&mut self, data: u8) {
-        if self.latch {
-            self.scroll_y = data
-        } else {
-            self.scroll_x = data
-        }
-
-        self.latch = !self.latch
-    }
-
-    pub fn reset_latch(&mut self) {
-        self.latch = false
-    }
-}
-
 // 7  bit  0
 // ---- ----
 // BGRs bMmG
@@ -237,5 +235,67 @@ pub struct Mask {
 impl Mask {
     pub fn update(&mut self, bits: u8) {
         *self = Self::from_bits(bits);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ScrollState;
+
+    #[test]
+    fn control_and_scroll_writes_preserve_each_others_fields() {
+        let mut scroll = ScrollState::default();
+
+        scroll.write_control(3);
+        scroll.write_scroll(19);
+        scroll.write_scroll(29);
+
+        assert_eq!(scroll.temporary_address, 0x5C62);
+        assert_eq!(scroll.current_address, 0);
+        assert_eq!(scroll.fine_x, 3);
+        assert!(!scroll.write_toggle);
+
+        scroll.write_control(1);
+        assert_eq!(scroll.temporary_address, 0x5462);
+        assert_eq!(scroll.current_address, 0);
+        assert_eq!(scroll.fine_x, 3);
+        assert!(!scroll.write_toggle);
+    }
+
+    #[test]
+    fn scroll_and_address_writes_share_the_toggle() {
+        let mut scroll = ScrollState::default();
+
+        scroll.write_control(3);
+        scroll.write_scroll(19);
+        assert!(scroll.write_toggle);
+
+        // This completes the pair started by the scroll write.
+        scroll.write_address(0x80);
+
+        assert_eq!(scroll.temporary_address, 0x0C80);
+        assert_eq!(scroll.current_address, 0x0C80);
+        assert_eq!(scroll.fine_x, 3);
+        assert!(!scroll.write_toggle);
+    }
+
+    #[test]
+    fn resetting_toggle_restarts_address_write_and_masks_high_byte() {
+        let mut scroll = ScrollState::default();
+
+        scroll.write_scroll(19);
+        scroll.reset_write_toggle();
+        assert!(!scroll.write_toggle);
+
+        scroll.write_address(0xFF);
+        assert_eq!(scroll.temporary_address, 0x3F02);
+        assert_eq!(scroll.current_address, 0);
+        assert!(scroll.write_toggle);
+
+        scroll.write_address(0x80);
+        assert_eq!(scroll.temporary_address, 0x3F80);
+        assert_eq!(scroll.current_address, 0x3F80);
+        assert_eq!(scroll.fine_x, 3);
+        assert!(!scroll.write_toggle);
     }
 }

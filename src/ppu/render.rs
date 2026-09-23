@@ -9,12 +9,12 @@ impl NES {
     }
 
     fn render_background(&mut self) {
-        let scroll_x = self.bus.ppu.registers.scroll.scroll_x as usize;
-        let scroll_y = self.bus.ppu.registers.scroll.scroll_y as usize;
+        let scroll_x = self.bus.ppu.registers.scroll.scroll_x() as usize;
+        let scroll_y = self.bus.ppu.registers.scroll.scroll_y() as usize;
 
         let (first_nametable, second_nametable) = match (
             self.bus.cartridge.screen_mirroring.clone(),
-            self.bus.ppu.registers.control.name_table_address(),
+            self.bus.ppu.registers.scroll.name_table_address(),
         ) {
             (ScreenMirroring::Vertical, 0x2000)
             | (ScreenMirroring::Vertical, 0x2800)
@@ -57,7 +57,7 @@ impl NES {
                 second_nametable,
                 ViewPortRect::new(0, 0, 256, scroll_y),
                 0,
-                (240 - scroll_y) as isize,
+                240 - (scroll_y as isize),
             );
         }
     }

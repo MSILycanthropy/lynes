@@ -83,11 +83,12 @@ impl Ppu {
     }
 
     pub(crate) fn write_address(&mut self, data: u8) {
-        self.registers.address.update(data);
+        self.registers.scroll.write_address(data);
     }
 
     pub(crate) fn write_control(&mut self, data: u8) {
         self.registers.control.update(data);
+        self.registers.scroll.write_control(data);
     }
 
     pub(crate) fn write_mask(&mut self, data: u8) {
@@ -95,15 +96,14 @@ impl Ppu {
     }
 
     pub(crate) fn write_scroll(&mut self, data: u8) {
-        self.registers.scroll.update(data)
+        self.registers.scroll.write_scroll(data);
     }
 
     pub(crate) fn read_status(&mut self) -> u8 {
         let data = self.registers.status.into_bits();
 
         self.registers.status.set_vblank_started(false);
-        self.registers.address.reset_latch();
-        self.registers.scroll.reset_latch();
+        self.registers.scroll.reset_write_toggle();
 
         data
     }
@@ -141,7 +141,7 @@ pub trait PPU {
 
 impl PPU for NES {
     fn ppu_read(&mut self) -> u8 {
-        let address = self.bus.ppu.registers.address.as_u16();
+        let address = self.bus.ppu.registers.scroll.memory_address();
 
         self.bus.ppu.registers.increment_vram_address();
 
@@ -163,7 +163,7 @@ impl PPU for NES {
     }
 
     fn ppu_write(&mut self, value: u8) {
-        let address = self.bus.ppu.registers.address.as_u16();
+        let address = self.bus.ppu.registers.scroll.memory_address();
         match address {
             0..=0x1FFF => self.bus.cartridge.ppu_write(address, value),
             0x2000..=0x3EFF => {

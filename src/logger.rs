@@ -230,7 +230,8 @@ mod tests {
         nes.bus.ppu.write_address(0x00);
         nes.bus.controller.button_state.set_a(true);
 
-        for (address, expected) in [(0x2002u16, 0x80), (0x2007, 0x45), (0x4016, 1)] {
+        // The $40 operand byte written below supplies the controller's open-bus bits.
+        for (address, expected) in [(0x2002u16, 0x80), (0x2007, 0x45), (0x4016, 0x41)] {
             let [low, high] = address.to_le_bytes();
             nes.bus.write(1, low);
             nes.bus.write(2, high);

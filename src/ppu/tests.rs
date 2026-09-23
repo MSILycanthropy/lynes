@@ -34,9 +34,83 @@ fn read_nametable(nes: &mut NES, address: u16) -> u8 {
     nes.cpu_read(0x2007)
 }
 
-fn read_palette(nes: &mut NES, address: u16) -> u8 {
+fn read_palette_color(nes: &mut NES, address: u16) -> u8 {
     set_vram_address(nes, address);
-    nes.cpu_read(0x2007)
+    // Storage/mirroring checks compare color bits; upper bits come from the I/O latch.
+    nes.cpu_read(0x2007) & 0x3F
+}
+
+#[test]
+fn status_writes_latch_data_without_changing_flags_or_scroll_toggle() {
+    let mut nes = NES::default();
+    nes.bus.ppu.registers.status.set_vblank_started(true);
+    nes.bus.ppu.registers.status.set_sprite_zero_hit(true);
+    nes.cpu_write(0x2005, 0x12);
+
+    nes.cpu_write(0x3FFA, 0x1B); // Mirrored PPUSTATUS write.
+    assert_eq!(nes.bus.peek(0x2000), 0x1B);
+    assert_eq!(nes.bus.peek(0x2002), 0xDB);
+    assert_eq!(nes.bus.peek(0x2000), 0x1B); // Status peek doesn't latch its result.
+
+    nes.cpu_write(0x2005, 0x34);
+    assert_eq!(nes.bus.ppu.registers.scroll.scroll_x(), 0x12);
+    assert_eq!(nes.bus.ppu.registers.scroll.scroll_y(), 0x34);
+    assert_eq!(nes.cpu_read(0x2002), 0xD4);
+    assert_eq!(nes.bus.peek(0x2000), 0xD4); // Latches status before clearing vblank.
+    assert_eq!(nes.bus.peek(0x2002), 0x54);
+}
+
+#[test]
+fn data_and_oam_reads_latch_returned_bytes_but_peeks_do_not() {
+    let mut nes = NES::default();
+    set_vram_address(&mut nes, 0x2000);
+    nes.bus.ppu.read_buffer = 0xA6;
+    nes.bus.ciram[0] = 0x39;
+
+    assert_eq!(nes.bus.peek(0x2007), 0xA6);
+    assert_eq!(nes.bus.peek(0x2000), 0);
+    assert_eq!(nes.cpu_read(0x2007), 0xA6);
+    assert_eq!(nes.bus.peek(0x2000), 0xA6);
+    assert_eq!(nes.bus.ppu.read_buffer, 0x39); // Refill is separate from the I/O latch.
+
+    nes.bus.ppu.oam_data[0] = 0xCA;
+    nes.cpu_write(0x2003, 0);
+    nes.cpu_write(0x2002, 0x5B);
+    assert_eq!(nes.bus.peek(0x2004), 0xCA);
+    assert_eq!(nes.bus.peek(0x2000), 0x5B);
+    assert_eq!(nes.cpu_read(0x2004), 0xCA);
+    assert_eq!(nes.bus.peek(0x2000), 0xCA);
+    assert_eq!(nes.bus.ppu.registers.oam_addr, 0);
+}
+
+#[test]
+fn palette_reads_combine_latch_bits_and_greyscale_while_refilling_buffer() {
+    for greyscale in [false, true] {
+        for upper_bits in [0x00, 0x40, 0x80, 0xC0] {
+            let mut nes = NES::default();
+            write_vram(&mut nes, 0x2F00, 0x9A);
+            write_vram(&mut nes, 0x3F00, 0x2F);
+            set_vram_address(&mut nes, 0x3F00);
+            nes.cpu_write(0x2001, u8::from(greyscale));
+            nes.cpu_write(0x2002, upper_bits | 0x15);
+            nes.bus.ppu.read_buffer = 0x55;
+            let expected = upper_bits | if greyscale { 0x20 } else { 0x2F };
+
+            assert_eq!(nes.bus.peek(0x2007), expected);
+            assert_eq!(nes.bus.peek(0x2000), upper_bits | 0x15);
+            assert_eq!(nes.bus.ppu.read_buffer, 0x55);
+            assert_eq!(nes.bus.ppu.registers.scroll.memory_address(), 0x3F00);
+
+            assert_eq!(nes.cpu_read(0x2007), expected);
+            assert_eq!(nes.bus.peek(0x2000), expected);
+            assert_eq!(nes.bus.ppu.palette_table[0], 0x2F);
+            assert_eq!(nes.bus.ppu.registers.scroll.memory_address(), 0x3F01);
+            assert_eq!(nes.bus.ppu.read_buffer, 0x9A);
+
+            set_vram_address(&mut nes, 0x2000);
+            assert_eq!(nes.cpu_read(0x2007), 0x9A);
+        }
+    }
 }
 
 #[test]
@@ -91,14 +165,14 @@ fn palette_reads_and_writes_mirror_every_32_bytes() {
             let alias = base + displacement;
             write_vram(&mut nes, base, 0x12);
             assert_eq!(
-                read_palette(&mut nes, alias),
+                read_palette_color(&mut nes, alias),
                 0x12,
                 "read ${alias:04X} after writing ${base:04X}"
             );
 
             write_vram(&mut nes, alias, 0x2B);
             assert_eq!(
-                read_palette(&mut nes, base),
+                read_palette_color(&mut nes, base),
                 0x2B,
                 "read ${base:04X} after writing ${alias:04X}"
             );
@@ -129,7 +203,7 @@ fn special_palette_aliases_work_in_both_directions_in_every_mirror() {
                 for other_displacement in (0..0x100).step_by(0x20) {
                     for alias in [background + other_displacement, sprite + other_displacement] {
                         assert_eq!(
-                            read_palette(&mut nes, alias),
+                            read_palette_color(&mut nes, alias),
                             value,
                             "read ${alias:04X} after writing ${address:04X}"
                         );
@@ -153,7 +227,7 @@ fn distinct_palette_entries_do_not_alias() {
     }
     for entry in entries {
         assert_eq!(
-            read_palette(&mut nes, 0x3F00 + entry),
+            read_palette_color(&mut nes, 0x3F00 + entry),
             0x20 + entry as u8,
             "palette entry ${entry:02X} was overwritten through another entry"
         );
@@ -177,7 +251,7 @@ fn palette_writes_store_only_six_color_bits() {
             // Inspect storage as well as readback: the renderer reads it directly.
             assert!(nes.bus.ppu.palette_table.iter().all(|&value| value <= 0x3F));
             assert_eq!(
-                read_palette(&mut nes, address),
+                read_palette_color(&mut nes, address),
                 expected,
                 "write ${written:02X} at ${address:04X}"
             );

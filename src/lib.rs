@@ -1,3 +1,4 @@
+pub mod bus;
 pub mod cartridge;
 pub mod cpu;
 pub mod frame;
@@ -12,9 +13,11 @@ use cpu::{AddrMode, CPU};
 use ppu::PPU;
 
 use crate::{
+    bus::CpuBus,
     cartridge::{Cartridge, ScreenMirroring},
+    cpu::Cpu,
     frame::Frame,
-    input::{ButtonState, Controller},
+    input::ButtonState,
 };
 
 #[derive(PartialEq)]
@@ -65,63 +68,30 @@ pub struct StepResult {
 }
 
 pub struct NES {
-    // cpu
-    cpu_ram: [u8; 2048],
     cpu_cycles: usize,
     total_cpu_cycles: usize,
-    pub cpu_registers: cpu::registers::CpuRegisters,
+    pub cpu: Cpu,
+    pub bus: CpuBus,
 
-    // ppu
-    palette_table: [u8; 32],
-    ppu_vram: [u8; 2048],
-
-    oam_data: [u8; 256],
-    ppu_dot: usize,
-    ppu_scanline: usize,
-    ppu_read_buffer: u8,
-    pub ppu_registers: ppu::registers::PpuRegisters,
-    ppu_odd_frame: bool,
-
-    // misc
     interrupt_state: InterruptState,
-
-    current_frame: Frame,
-    controller: Controller,
-
-    cartridge: Cartridge,
 }
 
 impl Default for NES {
     fn default() -> Self {
         Self {
-            cpu_ram: [0; 2048],
             cpu_cycles: 0,
             total_cpu_cycles: 0,
-            cpu_registers: cpu::registers::CpuRegisters::default(),
-
-            palette_table: [0; 32],
-            ppu_vram: [0; 2048],
-
-            oam_data: [0; 256],
-            ppu_dot: 0,
-            ppu_scanline: 0,
-            ppu_read_buffer: 0,
-            ppu_registers: ppu::registers::PpuRegisters::default(),
-            ppu_odd_frame: false,
+            cpu: Cpu::default(),
+            bus: CpuBus::default(),
 
             interrupt_state: InterruptState::default(),
-
-            current_frame: Frame::new(),
-            controller: Controller::new(),
-            cartridge: Cartridge::default(),
         }
     }
 }
 
 impl NES {
-    /// The most recently rendered RGB frame.
     pub fn frame(&self) -> &Frame {
-        &self.current_frame
+        &self.bus.ppu.frame
     }
 
     pub fn step(&mut self) -> StepResult {
@@ -154,7 +124,7 @@ impl NES {
     }
 
     fn execute_cpu_action(&mut self) -> (StepKind, usize) {
-        let interrupt_disable = self.cpu_registers.status.interrupt_disable();
+        let interrupt_disable = self.cpu.registers.status.interrupt_disable();
 
         if let Some(interrupt) = self.interrupt_state.take(interrupt_disable) {
             let cycles = self.enter_interrupt(&interrupt);
@@ -168,17 +138,17 @@ impl NES {
     }
 
     pub fn reset(&mut self) {
-        self.cpu_registers.accumulator = 0;
-        self.cpu_registers.x = 0;
-        self.cpu_registers.y = 0;
-        self.cpu_registers.stack_pointer = 0xFD;
+        self.cpu.registers.accumulator = 0;
+        self.cpu.registers.x = 0;
+        self.cpu.registers.y = 0;
+        self.cpu.registers.stack_pointer = 0xFD;
 
-        self.cpu_registers.status.set_bits(0b0010_0100);
-        self.cpu_registers.program_counter = self.cpu_read_u16(0xFFFC);
+        self.cpu.registers.status.set_bits(0b0010_0100);
+        self.cpu.registers.program_counter = self.cpu_read_u16(0xFFFC);
 
         self.cpu_cycles = 7;
         self.total_cpu_cycles = 7;
-        self.ppu_dot = 21;
+        self.bus.ppu.dot = 21;
     }
 
     pub fn insert_cart(&mut self, mut cart: Cartridge) {
@@ -187,12 +157,12 @@ impl NES {
             "No four screen mirroring yet cuz it hard."
         );
 
-        std::mem::swap(&mut cart.prg_ram, &mut self.cartridge.prg_ram);
-        self.cartridge = cart;
+        std::mem::swap(&mut cart.prg_ram, &mut self.bus.cartridge.prg_ram);
+        self.bus.cartridge = cart;
     }
 
     pub fn update_buttons(&mut self, update: impl FnOnce(&mut ButtonState)) {
-        update(&mut self.controller.button_state);
+        update(&mut self.bus.controller.button_state);
     }
 
     // Returns the address and if a page boundary was crossed
@@ -205,10 +175,10 @@ impl NES {
                 "Accumulator addressing mode has no operating address as it operates on the accumulator"
             ),
             AddrMode::Immediate => {
-                let addr = self.cpu_registers.program_counter;
+                let addr = self.cpu.registers.program_counter;
                 (addr, false)
             }
-            _ => self.get_absolute_address(self.cpu_registers.program_counter, mode),
+            _ => self.get_absolute_address(self.cpu.registers.program_counter, mode),
         }
     }
 
@@ -219,11 +189,11 @@ impl NES {
                 (addr, false)
             }
             AddrMode::ZeroPageX => {
-                let addr = self.cpu_read(addr).wrapping_add(self.cpu_registers.x) as u16;
+                let addr = self.cpu_read(addr).wrapping_add(self.cpu.registers.x) as u16;
                 (addr, false)
             }
             AddrMode::ZeroPageY => {
-                let addr = self.cpu_read(addr).wrapping_add(self.cpu_registers.y) as u16;
+                let addr = self.cpu_read(addr).wrapping_add(self.cpu.registers.y) as u16;
                 (addr, false)
             }
             AddrMode::Relative => {
@@ -239,13 +209,13 @@ impl NES {
             }
             AddrMode::AbsoluteX => {
                 let old_addr = self.cpu_read_u16(addr);
-                let addr = old_addr.wrapping_add(self.cpu_registers.x as u16);
+                let addr = old_addr.wrapping_add(self.cpu.registers.x as u16);
 
                 (addr, page_crossed(old_addr, addr))
             }
             AddrMode::AbsoluteY => {
                 let old_addr = self.cpu_read_u16(addr);
-                let addr = old_addr.wrapping_add(self.cpu_registers.y as u16);
+                let addr = old_addr.wrapping_add(self.cpu.registers.y as u16);
 
                 (addr, page_crossed(old_addr, addr))
             }
@@ -265,7 +235,7 @@ impl NES {
             }
             AddrMode::IndirectX => {
                 let zero_page_addr = self.cpu_read(addr);
-                let pointer = zero_page_addr.wrapping_add(self.cpu_registers.x);
+                let pointer = zero_page_addr.wrapping_add(self.cpu.registers.x);
                 let low = self.cpu_read(pointer as u16);
                 let high = self.cpu_read(pointer.wrapping_add(1) as u16);
 
@@ -279,7 +249,7 @@ impl NES {
                 let high = self.cpu_read(zero_page_addr.wrapping_add(1) as u16);
 
                 let old_addr = u16::from_le_bytes([low, high]);
-                let addr = old_addr.wrapping_add(self.cpu_registers.y as u16);
+                let addr = old_addr.wrapping_add(self.cpu.registers.y as u16);
 
                 (addr, page_crossed(old_addr, addr))
             }

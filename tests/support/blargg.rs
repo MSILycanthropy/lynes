@@ -93,7 +93,7 @@ fn report(nes: &mut NES, outcome: Outcome, cpu_cycles: usize, resets: usize) -> 
         outcome,
         cpu_cycles,
         resets,
-        pc: nes.cpu_registers.program_counter,
+        pc: nes.cpu.registers.program_counter,
         status,
         text,
     }

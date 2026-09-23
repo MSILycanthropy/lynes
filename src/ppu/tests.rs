@@ -68,9 +68,9 @@ fn renderer_reads_background_and_sprite_patterns_from_cartridge() {
     let mut nes = NES::default();
     nes.insert_cart(cart);
     nes.ppu_write_control(0x08);
-    nes.palette_table[1] = 1;
-    nes.palette_table[0x12] = 2;
-    nes.oam_data[..4].copy_from_slice(&[16, 1, 0, 16]);
+    nes.bus.ppu.palette_table[1] = 1;
+    nes.bus.ppu.palette_table[0x12] = 2;
+    nes.bus.ppu.oam_data[..4].copy_from_slice(&[16, 1, 0, 16]);
 
     nes.render();
 
@@ -177,7 +177,7 @@ fn palette_writes_store_only_six_color_bits() {
         for address in 0x3F00..=0x3FFF {
             write_vram(&mut nes, address, written);
             // Inspect storage as well as readback: the renderer reads it directly.
-            assert!(nes.palette_table.iter().all(|&value| value <= 0x3F));
+            assert!(nes.bus.ppu.palette_table.iter().all(|&value| value <= 0x3F));
             assert_eq!(
                 read_palette(&mut nes, address),
                 expected,
@@ -266,8 +266,8 @@ fn four_screen_cartridges_are_rejected() {
 }
 
 fn assert_frame_length(nes: &mut NES, dots: usize) {
-    assert_eq!((nes.ppu_scanline, nes.ppu_dot), (0, 0));
-    let was_odd = nes.ppu_odd_frame;
+    assert_eq!((nes.bus.ppu.scanline, nes.bus.ppu.dot), (0, 0));
+    let was_odd = nes.bus.ppu.odd_frame;
 
     for elapsed in 1..=dots {
         assert_eq!(
@@ -277,27 +277,27 @@ fn assert_frame_length(nes: &mut NES, dots: usize) {
         );
     }
 
-    assert_eq!((nes.ppu_scanline, nes.ppu_dot), (0, 0));
-    assert_eq!(nes.ppu_odd_frame, !was_odd);
+    assert_eq!((nes.bus.ppu.scanline, nes.bus.ppu.dot), (0, 0));
+    assert_eq!(nes.bus.ppu.odd_frame, !was_odd);
 }
 
 #[test]
 fn vblank_starts_at_scanline_241_dot_1() {
     for nmi_enabled in [false, true] {
         let mut nes = NES::default();
-        nes.ppu_scanline = 240;
-        nes.ppu_dot = 340;
+        nes.bus.ppu.scanline = 240;
+        nes.bus.ppu.dot = 340;
         nes.ppu_write_control(if nmi_enabled { 0x80 } else { 0 });
 
         assert!(!nes.tick_ppu());
-        assert_eq!((nes.ppu_scanline, nes.ppu_dot), (241, 0));
-        assert!(!nes.ppu_registers.status.vblank_started());
+        assert_eq!((nes.bus.ppu.scanline, nes.bus.ppu.dot), (241, 0));
+        assert!(!nes.bus.ppu.registers.status.vblank_started());
         assert!(!nes.interrupt_state.nmi_pending);
 
         assert!(!nes.tick_ppu());
-        assert!(nes.ppu_registers.status.vblank_started());
+        assert!(nes.bus.ppu.registers.status.vblank_started());
         assert_eq!(nes.interrupt_state.nmi_pending, nmi_enabled);
-        assert!(!nes.ppu_registers.status.sprite_zero_hit());
+        assert!(!nes.bus.ppu.registers.status.sprite_zero_hit());
 
         // Once acknowledged, the same vblank must not request NMI every dot.
         let interrupt = nes.interrupt_state.take(true);
@@ -310,30 +310,30 @@ fn vblank_starts_at_scanline_241_dot_1() {
 #[test]
 fn pre_render_dot_1_clears_flags_but_preserves_pending_interrupts() {
     let mut nes = NES::default();
-    nes.ppu_scanline = 260;
-    nes.ppu_dot = 340;
-    nes.ppu_registers.status.set_vblank_started(true);
-    nes.ppu_registers.status.set_sprite_zero_hit(true);
-    nes.ppu_registers.status.set_sprite_overflow(true);
+    nes.bus.ppu.scanline = 260;
+    nes.bus.ppu.dot = 340;
+    nes.bus.ppu.registers.status.set_vblank_started(true);
+    nes.bus.ppu.registers.status.set_sprite_zero_hit(true);
+    nes.bus.ppu.registers.status.set_sprite_overflow(true);
     nes.interrupt_state.nmi_pending = true;
     nes.interrupt_state.irq_asserted = true;
 
     assert!(!nes.tick_ppu());
-    assert_eq!((nes.ppu_scanline, nes.ppu_dot), (261, 0));
-    assert!(nes.ppu_registers.status.vblank_started());
-    assert!(nes.ppu_registers.status.sprite_zero_hit());
-    assert!(nes.ppu_registers.status.sprite_overflow());
+    assert_eq!((nes.bus.ppu.scanline, nes.bus.ppu.dot), (261, 0));
+    assert!(nes.bus.ppu.registers.status.vblank_started());
+    assert!(nes.bus.ppu.registers.status.sprite_zero_hit());
+    assert!(nes.bus.ppu.registers.status.sprite_overflow());
 
     assert!(!nes.tick_ppu());
-    assert!(!nes.ppu_registers.status.vblank_started());
-    assert!(!nes.ppu_registers.status.sprite_zero_hit());
-    assert!(!nes.ppu_registers.status.sprite_overflow());
+    assert!(!nes.bus.ppu.registers.status.vblank_started());
+    assert!(!nes.bus.ppu.registers.status.sprite_zero_hit());
+    assert!(!nes.bus.ppu.registers.status.sprite_overflow());
 
     // Neither pre-render flag clearing nor frame wrap consumes the CPU latch.
     for _ in 0..340 {
         nes.tick_ppu();
     }
-    assert_eq!((nes.ppu_scanline, nes.ppu_dot), (0, 0));
+    assert_eq!((nes.bus.ppu.scanline, nes.bus.ppu.dot), (0, 0));
     assert!(matches!(
         nes.interrupt_state.take(true),
         Some(Interrupt::NMI)
@@ -344,7 +344,7 @@ fn pre_render_dot_1_clears_flags_but_preserves_pending_interrupts() {
 #[test]
 fn enabling_nmi_during_vblank_requests_only_on_enable_edges() {
     let mut nes = NES::default();
-    nes.ppu_scanline = 241;
+    nes.bus.ppu.scanline = 241;
     nes.tick_ppu();
     assert!(!nes.interrupt_state.nmi_pending);
 
@@ -387,33 +387,33 @@ fn either_rendering_layer_shortens_only_odd_frames() {
 fn dot_skip_uses_rendering_state_at_the_end_of_pre_render() {
     for rendering_at_skip in [false, true] {
         let mut nes = NES::default();
-        nes.ppu_odd_frame = true;
+        nes.bus.ppu.odd_frame = true;
         nes.ppu_write_mask(if rendering_at_skip { 0 } else { 0x08 });
-        nes.ppu_scanline = 261;
-        nes.ppu_dot = 338;
+        nes.bus.ppu.scanline = 261;
+        nes.bus.ppu.dot = 338;
         assert!(!nes.tick_ppu());
 
         nes.ppu_write_mask(if rendering_at_skip { 0x08 } else { 0 });
         assert_eq!(nes.tick_ppu(), rendering_at_skip);
         if !rendering_at_skip {
-            assert_eq!((nes.ppu_scanline, nes.ppu_dot), (261, 340));
+            assert_eq!((nes.bus.ppu.scanline, nes.bus.ppu.dot), (261, 340));
             assert!(nes.tick_ppu());
         }
-        assert_eq!((nes.ppu_scanline, nes.ppu_dot), (0, 0));
-        assert!(!nes.ppu_odd_frame);
+        assert_eq!((nes.bus.ppu.scanline, nes.bus.ppu.dot), (0, 0));
+        assert!(!nes.bus.ppu.odd_frame);
     }
 }
 
 #[test]
 fn cpu_cycle_advancement_keeps_ticking_after_frame_completion() {
     let mut nes = NES::default();
-    nes.ppu_scanline = 261;
-    nes.ppu_dot = 339;
+    nes.bus.ppu.scanline = 261;
+    nes.bus.ppu.dot = 339;
 
     assert!(nes.advance_cpu_cycles(2));
     assert_eq!(nes.total_cpu_cycles, 2);
-    assert_eq!((nes.ppu_scanline, nes.ppu_dot), (0, 4));
+    assert_eq!((nes.bus.ppu.scanline, nes.bus.ppu.dot), (0, 4));
     assert!(!nes.advance_cpu_cycles(1));
     assert_eq!(nes.total_cpu_cycles, 3);
-    assert_eq!((nes.ppu_scanline, nes.ppu_dot), (0, 7));
+    assert_eq!((nes.bus.ppu.scanline, nes.bus.ppu.dot), (0, 7));
 }

@@ -24,7 +24,7 @@ struct CpuState {
 
 impl CpuState {
     fn capture(nes: &NES, cycles: usize) -> Self {
-        let registers = &nes.cpu_registers;
+        let registers = &nes.cpu.registers;
         Self {
             pc: registers.program_counter,
             a: registers.accumulator,
@@ -95,7 +95,7 @@ fn cpu_matches_nestest_reference() {
     nes.insert_cart(Cartridge::load(ROM_PATH));
     nes.reset();
 
-    nes.cpu_registers.program_counter = 0xC000;
+    nes.cpu.registers.program_counter = 0xC000;
 
     let mut cycles = RESET_CYCLES;
     for (index, expected_state) in expected.iter().enumerate() {

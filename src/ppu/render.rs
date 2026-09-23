@@ -9,31 +9,31 @@ impl NES {
     }
 
     fn render_background(&mut self) {
-        let scroll_x = self.ppu_registers.scroll.scroll_x as usize;
-        let scroll_y = self.ppu_registers.scroll.scroll_y as usize;
+        let scroll_x = self.bus.ppu.registers.scroll.scroll_x as usize;
+        let scroll_y = self.bus.ppu.registers.scroll.scroll_y as usize;
 
         let (first_nametable, second_nametable) = match (
-            self.cartridge.screen_mirroring.clone(),
-            self.ppu_registers.control.name_table_address(),
+            self.bus.cartridge.screen_mirroring.clone(),
+            self.bus.ppu.registers.control.name_table_address(),
         ) {
             (ScreenMirroring::Vertical, 0x2000)
             | (ScreenMirroring::Vertical, 0x2800)
             | (ScreenMirroring::Horizontal, 0x2000)
             | (ScreenMirroring::Horizontal, 0x2400) => (
-                &self.ppu_vram.clone()[0..0x400],
-                &self.ppu_vram.clone()[0x400..0x800],
+                &self.bus.ciram.clone()[0..0x400],
+                &self.bus.ciram.clone()[0x400..0x800],
             ),
             (ScreenMirroring::Vertical, 0x2400)
             | (ScreenMirroring::Vertical, 0x2C00)
             | (ScreenMirroring::Horizontal, 0x2800)
             | (ScreenMirroring::Horizontal, 0x2C00) => (
-                &self.ppu_vram.clone()[0x400..0x800],
-                &self.ppu_vram.clone()[0..0x400],
+                &self.bus.ciram.clone()[0x400..0x800],
+                &self.bus.ciram.clone()[0..0x400],
             ),
             (_, _) => {
                 panic!(
                     "Not supported mirroring type {:?}",
-                    self.cartridge.screen_mirroring
+                    self.bus.cartridge.screen_mirroring
                 );
             }
         };
@@ -70,7 +70,9 @@ impl NES {
         shift_y: isize,
     ) {
         let bank = self
-            .ppu_registers
+            .bus
+            .ppu
+            .registers
             .control
             .background_pattern_address_value();
         let attribute_table = &name_table[0x3C0..0x400];
@@ -83,8 +85,8 @@ impl NES {
             let palette = self.background_palette(attribute_table, tile_x, tile_y);
 
             for y in 0..=7 {
-                let mut high = self.cartridge.ppu_read(tile_address + y as u16);
-                let mut low = self.cartridge.ppu_read(tile_address + y as u16 + 8);
+                let mut high = self.bus.cartridge.ppu_read(tile_address + y as u16);
+                let mut low = self.bus.cartridge.ppu_read(tile_address + y as u16 + 8);
 
                 for x in (0..=7).rev() {
                     let value = (1 & low) << 1 | 1 & high;
@@ -98,7 +100,7 @@ impl NES {
                     let pixel_y = tile_y * 8 + y;
 
                     if view_port.point_is_bounded(pixel_x, pixel_y) {
-                        self.current_frame.set_pixel(
+                        self.bus.ppu.frame.set_pixel(
                             (shift_x + pixel_x as isize) as usize,
                             (shift_y + pixel_y as isize) as usize,
                             color,
@@ -110,23 +112,28 @@ impl NES {
     }
 
     fn render_sprites(&mut self) {
-        for i in (0..self.oam_data.len()).step_by(4).rev() {
-            let tile = self.oam_data[i + 1] as u16;
-            let tile_x = self.oam_data[i + 3] as usize;
-            let tile_y = self.oam_data[i] as usize;
+        for i in (0..self.bus.ppu.oam_data.len()).step_by(4).rev() {
+            let tile = self.bus.ppu.oam_data[i + 1] as u16;
+            let tile_x = self.bus.ppu.oam_data[i + 3] as usize;
+            let tile_y = self.bus.ppu.oam_data[i] as usize;
 
-            let flip_vertical = self.oam_data[i + 2] >> 7 & 1 == 1;
-            let flip_horizontal = self.oam_data[i + 2] >> 6 & 1 == 1;
+            let flip_vertical = self.bus.ppu.oam_data[i + 2] >> 7 & 1 == 1;
+            let flip_horizontal = self.bus.ppu.oam_data[i + 2] >> 6 & 1 == 1;
 
             let palette = self.sprite_palette(i);
 
-            let bank = self.ppu_registers.control.sprite_pattern_address_value();
+            let bank = self
+                .bus
+                .ppu
+                .registers
+                .control
+                .sprite_pattern_address_value();
 
             let tile_address = bank + tile * 16;
 
             for y in 0..=7 {
-                let mut high = self.cartridge.ppu_read(tile_address + y as u16);
-                let mut low = self.cartridge.ppu_read(tile_address + y as u16 + 8);
+                let mut high = self.bus.cartridge.ppu_read(tile_address + y as u16);
+                let mut low = self.bus.cartridge.ppu_read(tile_address + y as u16 + 8);
 
                 'inner: for x in (0..=7).rev() {
                     let value = (1 & low) << 1 | 1 & high;
@@ -142,18 +149,24 @@ impl NES {
 
                     match (flip_horizontal, flip_vertical) {
                         (false, false) => {
-                            self.current_frame.set_pixel(tile_x + x, tile_y + y, color)
+                            self.bus.ppu.frame.set_pixel(tile_x + x, tile_y + y, color)
                         }
                         (true, false) => {
-                            self.current_frame
+                            self.bus
+                                .ppu
+                                .frame
                                 .set_pixel(tile_x + 7 - x, tile_y + y, color)
                         }
                         (false, true) => {
-                            self.current_frame
+                            self.bus
+                                .ppu
+                                .frame
                                 .set_pixel(tile_x + x, tile_y + 7 - y, color)
                         }
                         (true, true) => {
-                            self.current_frame
+                            self.bus
+                                .ppu
+                                .frame
                                 .set_pixel(tile_x + 7 - x, tile_y + 7 - y, color)
                         }
                     }

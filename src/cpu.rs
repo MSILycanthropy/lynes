@@ -1,4 +1,4 @@
-use crate::{Interrupt, NES, ppu::PPU};
+use crate::{Interrupt, NES, cpu::registers::CpuRegisters, ppu::PPU};
 
 pub(crate) mod instructions;
 pub(crate) mod registers;
@@ -18,6 +18,11 @@ pub enum AddrMode {
     Indirect,
     IndirectX,
     IndirectY,
+}
+
+#[derive(Default)]
+pub struct Cpu {
+    pub registers: CpuRegisters,
 }
 
 pub trait CPU {
@@ -57,31 +62,31 @@ pub trait CPU {
 
 impl CPU for NES {
     fn enter_interrupt(&mut self, interrupt: &Interrupt) -> usize {
-        self.stack_push_u16(self.cpu_registers.program_counter);
+        self.stack_push_u16(self.cpu.registers.program_counter);
 
-        let mut status = self.cpu_registers.status.clone();
+        let mut status = self.cpu.registers.status.clone();
         status.set_b(0b10);
 
         self.stack_push(status.bits());
 
-        self.cpu_registers.status.set_interrupt_disable(true);
-        self.cpu_registers.program_counter = self.cpu_read_u16(interrupt.address());
+        self.cpu.registers.status.set_interrupt_disable(true);
+        self.cpu.registers.program_counter = self.cpu_read_u16(interrupt.address());
 
         7
     }
 
     fn execute_next_instruction(&mut self) -> (u16, u8, usize) {
-        let pc = self.cpu_registers.program_counter;
+        let pc = self.cpu.registers.program_counter;
         let opcode = self.cpu_read(pc);
-        self.cpu_registers.program_counter = pc.wrapping_add(1);
+        self.cpu.registers.program_counter = pc.wrapping_add(1);
 
-        let old_program_counter = self.cpu_registers.program_counter;
+        let old_program_counter = self.cpu.registers.program_counter;
 
         let (length, cycles) = self.execute_instruction(opcode);
 
-        if old_program_counter == self.cpu_registers.program_counter {
-            self.cpu_registers.program_counter =
-                self.cpu_registers.program_counter.wrapping_add(length);
+        if old_program_counter == self.cpu.registers.program_counter {
+            self.cpu.registers.program_counter =
+                self.cpu.registers.program_counter.wrapping_add(length);
         }
 
         (pc, opcode, cycles)
@@ -92,7 +97,7 @@ impl CPU for NES {
             0x0000..=0x1FFF => {
                 let mirrored_addr = addr & 0b00000111_11111111;
 
-                self.cpu_ram[mirrored_addr as usize]
+                self.bus.ram[mirrored_addr as usize]
             }
             0x2000 | 0x2001 | 0x2003 | 0x2005 | 0x2006 | 0x4014 => {
                 // panic!("attempted to read from write-only PPU address {:x}", addr);
@@ -105,13 +110,14 @@ impl CPU for NES {
                 // panic!("APU and I/O registers are not implemented yet!")
                 0
             }
-            0x4016 => self.controller.read(),
+            0x4016 => self.bus.controller.read(),
             0x4017 => 0,
             0x2008..=0x3FFF => {
                 let mirrored_down_address = addr & 0b00100000_00000111;
                 self.cpu_read(mirrored_down_address)
             }
             0x4020..=0xFFFF => self
+                .bus
                 .cartridge
                 .cpu_read(addr)
                 .unwrap_or_else(|| panic!("Invalid CPU read address: {:#06X}", addr)),
@@ -126,7 +132,7 @@ impl CPU for NES {
             0x0000..=0x1FFF => {
                 let mirrored_addr = addr & 0b00000111_11111111;
 
-                self.cpu_ram[mirrored_addr as usize] = data;
+                self.bus.ram[mirrored_addr as usize] = data;
             }
             0x2000 => self.ppu_write_control(data),
             0x2001 => self.ppu_write_mask(data),
@@ -153,25 +159,25 @@ impl CPU for NES {
             0x4000..=0x4015 => {
                 // panic!("APU and I/O registers are not implemented yet!")
             }
-            0x4016 => self.controller.write(data),
+            0x4016 => self.bus.controller.write(data),
             0x4017 => {
                 // ignore controller 2
             }
             0x4018..=0x401F => {
                 // panic!("APU and I/O functionality that is normally disabled")
             }
-            0x4020..=0xFFFF => self.cartridge.cpu_write(addr, data),
+            0x4020..=0xFFFF => self.bus.cartridge.cpu_write(addr, data),
         }
     }
 
     fn stack_push(&mut self, data: u8) {
-        self.cpu_write(0x0100 + self.cpu_registers.stack_pointer as u16, data);
-        self.cpu_registers.stack_pointer = self.cpu_registers.stack_pointer.wrapping_sub(1);
+        self.cpu_write(0x0100 + self.cpu.registers.stack_pointer as u16, data);
+        self.cpu.registers.stack_pointer = self.cpu.registers.stack_pointer.wrapping_sub(1);
     }
 
     fn stack_pop(&mut self) -> u8 {
-        self.cpu_registers.stack_pointer = self.cpu_registers.stack_pointer.wrapping_add(1);
-        self.cpu_read(0x0100 + self.cpu_registers.stack_pointer as u16)
+        self.cpu.registers.stack_pointer = self.cpu.registers.stack_pointer.wrapping_add(1);
+        self.cpu_read(0x0100 + self.cpu.registers.stack_pointer as u16)
     }
 
     fn execute_instruction(&mut self, opcode: u8) -> (u16, usize) {

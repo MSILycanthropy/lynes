@@ -10,7 +10,7 @@ const ILLEGAL_NOPS: [&'static str; 2] = ["DOP", "TOP"];
 pub fn log(nes: &mut NES) {
     println!(
         "{: <6}{: <10}{: <32}{}",
-        program_counter_log(nes.cpu_registers.program_counter).blue(),
+        program_counter_log(nes.cpu.registers.program_counter).blue(),
         instruction_log(nes).cyan(),
         assembly_log(nes).yellow(),
         cpu_registers_log(nes).magenta()
@@ -22,18 +22,18 @@ fn program_counter_log(program_counter: u16) -> String {
 }
 
 fn instruction_log(nes: &mut NES) -> String {
-    let opcode = nes.cpu_read(nes.cpu_registers.program_counter);
+    let opcode = nes.cpu_read(nes.cpu.registers.program_counter);
     let instruction = &cpu::instructions::INSTRUCTIONS_TABLE[opcode as usize];
 
     let log = match instruction.len {
         1 => format!("{:02X}", opcode),
         2 => {
-            let operand = nes.cpu_read(nes.cpu_registers.program_counter + 1);
+            let operand = nes.cpu_read(nes.cpu.registers.program_counter + 1);
             format!("{:02X} {:02X}", opcode, operand)
         }
         3 => {
-            let operand1 = nes.cpu_read(nes.cpu_registers.program_counter + 1);
-            let operand2 = nes.cpu_read(nes.cpu_registers.program_counter + 2);
+            let operand1 = nes.cpu_read(nes.cpu.registers.program_counter + 1);
+            let operand2 = nes.cpu_read(nes.cpu.registers.program_counter + 2);
             format!("{:02X} {:02X} {:02X}", opcode, operand1, operand2)
         }
         _ => unreachable!(),
@@ -47,7 +47,7 @@ fn instruction_log(nes: &mut NES) -> String {
 }
 
 fn assembly_log(nes: &mut NES) -> String {
-    let opcode = nes.cpu_read(nes.cpu_registers.program_counter);
+    let opcode = nes.cpu_read(nes.cpu.registers.program_counter);
     let instruction = &cpu::instructions::INSTRUCTIONS_TABLE[opcode as usize];
 
     let instruction_name = if ILLEGAL_NOPS.contains(&instruction.name) {
@@ -56,7 +56,7 @@ fn assembly_log(nes: &mut NES) -> String {
         instruction.name
     };
 
-    let program_counter = nes.cpu_registers.program_counter;
+    let program_counter = nes.cpu.registers.program_counter;
     let (mem_addr, stored) = match instruction.mode {
         AddrMode::Immediate | AddrMode::Accumulator | AddrMode::Implied => (0, 0),
         _ => {
@@ -135,7 +135,7 @@ fn assembly_log(nes: &mut NES) -> String {
                 "{} (${:02X},X) @ {:02X} = {:04X} = {:02X}",
                 instruction_name,
                 addr,
-                addr.wrapping_add(nes.cpu_registers.x),
+                addr.wrapping_add(nes.cpu.registers.x),
                 mem_addr,
                 stored
             )
@@ -145,7 +145,7 @@ fn assembly_log(nes: &mut NES) -> String {
                 "{} (${:02X}),Y = {:04X} @ {:04X} = {:02X}",
                 instruction_name,
                 addr,
-                mem_addr.wrapping_sub(nes.cpu_registers.y as u16),
+                mem_addr.wrapping_sub(nes.cpu.registers.y as u16),
                 mem_addr,
                 stored
             )
@@ -156,13 +156,13 @@ fn assembly_log(nes: &mut NES) -> String {
 fn cpu_registers_log(nes: &NES) -> String {
     format!(
         "A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:{:>3},{:>3} CYC:{}",
-        nes.cpu_registers.accumulator,
-        nes.cpu_registers.x,
-        nes.cpu_registers.y,
-        nes.cpu_registers.status.bits(),
-        nes.cpu_registers.stack_pointer,
-        nes.ppu_scanline,
-        nes.ppu_dot,
+        nes.cpu.registers.accumulator,
+        nes.cpu.registers.x,
+        nes.cpu.registers.y,
+        nes.cpu.registers.status.bits(),
+        nes.cpu.registers.stack_pointer,
+        nes.bus.ppu.scanline,
+        nes.bus.ppu.dot,
         nes.total_cpu_cycles,
     )
 }

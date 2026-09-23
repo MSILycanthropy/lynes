@@ -103,8 +103,8 @@ impl CPU for NES {
                 // panic!("attempted to read from write-only PPU address {:x}", addr);
                 0
             }
-            0x2002 => self.ppu_read_status(),
-            0x2004 => self.ppu_read_oam_data(),
+            0x2002 => self.bus.ppu.read_status(),
+            0x2004 => self.bus.ppu.read_oam_data(),
             0x2007 => self.ppu_read(),
             0x4000..=0x4015 => {
                 // panic!("APU and I/O registers are not implemented yet!")
@@ -135,12 +135,12 @@ impl CPU for NES {
                 self.bus.ram[mirrored_addr as usize] = data;
             }
             0x2000 => self.ppu_write_control(data),
-            0x2001 => self.ppu_write_mask(data),
+            0x2001 => self.bus.ppu.write_mask(data),
             0x2002 => {} // Writes dont change PPUSTATUS, but we do have tests that.. well test that.
-            0x2003 => self.ppu_write_oam_address(data),
-            0x2004 => self.ppu_write_oam_data(data),
-            0x2005 => self.ppu_write_scroll(data),
-            0x2006 => self.ppu_write_address(data),
+            0x2003 => self.bus.ppu.write_oam_address(data),
+            0x2004 => self.bus.ppu.write_oam_data(data),
+            0x2005 => self.bus.ppu.write_scroll(data),
+            0x2006 => self.bus.ppu.write_address(data),
             0x2007 => self.ppu_write(data),
             0x2008..=0x3FFF => {
                 let mirrored_down_address = addr & 0b00100000_00000111;

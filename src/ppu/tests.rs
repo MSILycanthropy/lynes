@@ -376,7 +376,7 @@ fn rendering_disabled_keeps_both_frame_parities_full_length() {
 fn either_rendering_layer_shortens_only_odd_frames() {
     for mask in [0x08, 0x10, 0x18] {
         let mut nes = NES::default();
-        nes.ppu_write_mask(mask);
+        nes.bus.ppu.write_mask(mask);
         for dots in [89_342, 89_341, 89_342, 89_341] {
             assert_frame_length(&mut nes, dots);
         }
@@ -388,12 +388,12 @@ fn dot_skip_uses_rendering_state_at_the_end_of_pre_render() {
     for rendering_at_skip in [false, true] {
         let mut nes = NES::default();
         nes.bus.ppu.odd_frame = true;
-        nes.ppu_write_mask(if rendering_at_skip { 0 } else { 0x08 });
+        nes.bus.ppu.write_mask(if rendering_at_skip { 0 } else { 0x08 });
         nes.bus.ppu.scanline = 261;
         nes.bus.ppu.dot = 338;
         assert!(!nes.tick_ppu());
 
-        nes.ppu_write_mask(if rendering_at_skip { 0x08 } else { 0 });
+        nes.bus.ppu.write_mask(if rendering_at_skip { 0x08 } else { 0 });
         assert_eq!(nes.tick_ppu(), rendering_at_skip);
         if !rendering_at_skip {
             assert_eq!((nes.bus.ppu.scanline, nes.bus.ppu.dot), (261, 340));

@@ -33,21 +33,51 @@ impl Default for Ppu {
     }
 }
 
+impl Ppu {
+    pub(crate) fn write_address(&mut self, data: u8) {
+        self.registers.address.update(data);
+    }
+
+    pub(crate) fn write_mask(&mut self, data: u8) {
+        self.registers.mask.update(data);
+    }
+
+    pub(crate) fn write_scroll(&mut self, data: u8) {
+        self.registers.scroll.update(data)
+    }
+
+    pub(crate) fn read_status(&mut self) -> u8 {
+        let status = self.registers.status.clone();
+        let data = *status.into_bytes().first().unwrap();
+
+        self.registers.status.set_vblank_started(false);
+        self.registers.address.reset_latch();
+        self.registers.scroll.reset_latch();
+
+        data
+    }
+
+    pub(crate) fn write_oam_address(&mut self, data: u8) {
+        self.registers.oam_addr = data;
+    }
+
+    pub(crate) fn write_oam_data(&mut self, data: u8) {
+        self.oam_data[self.registers.oam_addr as usize] = data;
+        self.registers.oam_addr = self.registers.oam_addr.wrapping_add(1);
+    }
+
+    pub(crate) fn read_oam_data(&self) -> u8 {
+        self.oam_data[self.registers.oam_addr as usize]
+    }
+}
+
 pub trait PPU {
     fn tick_ppu(&mut self) -> bool;
     fn ppu_read(&mut self) -> u8;
     fn ppu_write(&mut self, value: u8);
 
-    fn ppu_write_address(&mut self, data: u8);
     fn ppu_write_control(&mut self, data: u8);
-    fn ppu_write_oam_address(&mut self, data: u8);
-    fn ppu_write_oam_data(&mut self, data: u8);
     fn ppu_write_oam_dma(&mut self, buffer: &[u8; 256]);
-    fn ppu_write_mask(&mut self, data: u8);
-    fn ppu_write_scroll(&mut self, data: u8);
-
-    fn ppu_read_status(&mut self) -> u8;
-    fn ppu_read_oam_data(&mut self) -> u8;
 
     fn background_palette(&self, attribute_table: &[u8], tile_x: usize, tile_y: usize) -> [u8; 4];
     fn sprite_palette(&self, index: usize) -> [u8; 4];
@@ -147,10 +177,6 @@ impl PPU for NES {
         self.bus.ppu.registers.increment_vram_address();
     }
 
-    fn ppu_write_address(&mut self, data: u8) {
-        self.bus.ppu.registers.address.update(data);
-    }
-
     fn ppu_write_control(&mut self, data: u8) {
         let nmi_status_before = self.bus.ppu.registers.control.generate_nmi();
 
@@ -164,42 +190,10 @@ impl PPU for NES {
         }
     }
 
-    fn ppu_write_mask(&mut self, data: u8) {
-        self.bus.ppu.registers.mask.update(data);
-    }
-
-    fn ppu_write_scroll(&mut self, data: u8) {
-        self.bus.ppu.registers.scroll.update(data)
-    }
-
-    fn ppu_write_oam_address(&mut self, data: u8) {
-        self.bus.ppu.registers.oam_addr = data;
-    }
-
-    fn ppu_write_oam_data(&mut self, data: u8) {
-        self.bus.ppu.oam_data[self.bus.ppu.registers.oam_addr as usize] = data;
-        self.bus.ppu.registers.oam_addr = self.bus.ppu.registers.oam_addr.wrapping_add(1);
-    }
-
     fn ppu_write_oam_dma(&mut self, buffer: &[u8; 256]) {
-        for data in buffer.iter() {
-            self.ppu_write_oam_data(*data);
+        for &data in buffer {
+            self.bus.ppu.write_oam_data(data);
         }
-    }
-
-    fn ppu_read_status(&mut self) -> u8 {
-        let status = self.bus.ppu.registers.status.clone();
-        let data = *status.into_bytes().first().unwrap();
-
-        self.bus.ppu.registers.status.set_vblank_started(false);
-        self.bus.ppu.registers.address.reset_latch();
-        self.bus.ppu.registers.scroll.reset_latch();
-
-        data
-    }
-
-    fn ppu_read_oam_data(&mut self) -> u8 {
-        self.bus.ppu.oam_data[self.bus.ppu.registers.oam_addr as usize]
     }
 
     fn background_palette(&self, attribute_table: &[u8], tile_x: usize, tile_y: usize) -> [u8; 4] {

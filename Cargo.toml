@@ -10,7 +10,7 @@ path = "src/main.rs"
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 colored = "3"
-modular-bitfield = "0.13"
+bitfield-struct = "0.13"
 thiserror = "2"
 wgpu = "30"
 winit = "0.30"

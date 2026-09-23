@@ -99,8 +99,7 @@ impl Ppu {
     }
 
     pub(crate) fn read_status(&mut self) -> u8 {
-        let status = self.registers.status.clone();
-        let data = *status.into_bytes().first().unwrap();
+        let data = self.registers.status.into_bits();
 
         self.registers.status.set_vblank_started(false);
         self.registers.address.reset_latch();

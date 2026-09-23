@@ -1,4 +1,4 @@
-use modular_bitfield::{bitfield, specifiers::B2};
+use bitfield_struct::bitfield;
 
 pub struct CpuRegisters {
     pub accumulator: u8,
@@ -35,24 +35,24 @@ impl Default for CpuRegisters {
 // | +-------------- Overflow
 // +---------------- Negative
 //
-#[bitfield]
-#[derive(Clone)]
+#[bitfield(u8)]
 pub struct Status {
     pub carry: bool,
     pub zero: bool,
     pub interrupt_disable: bool,
     pub decimal: bool,
-    pub b: B2,
+    #[bits(2)]
+    pub b: u8,
     pub overflow: bool,
     pub negative: bool,
 }
 
 impl Status {
     pub fn bits(&self) -> u8 {
-        self.clone().into_bytes()[0]
+        self.into_bits()
     }
 
     pub fn set_bits(&mut self, bits: u8) {
-        self.bytes = [bits];
+        *self = Self::from_bits(bits);
     }
 }

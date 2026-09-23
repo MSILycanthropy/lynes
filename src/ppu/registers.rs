@@ -1,7 +1,4 @@
-use modular_bitfield::{
-    bitfield,
-    prelude::{B2, B5},
-};
+use bitfield_struct::bitfield;
 
 pub struct PpuRegisters {
     pub address: Address,
@@ -115,10 +112,10 @@ impl Address {
 // |          (0: read backdrop from EXT pins; 1: output color on EXT pins)
 // +--------- Generate an NMI at the start of the
 //            vertical blanking interval (0: off; 1: on)
-#[bitfield]
-#[derive(Clone)]
+#[bitfield(u8)]
 pub struct Control {
-    pub nametable: B2,
+    #[bits(2)]
+    pub nametable: u8,
     pub vram_address_increment: bool,
     pub sprite_pattern_address: bool,
     pub background_pattern_address: bool,
@@ -129,7 +126,7 @@ pub struct Control {
 
 impl Control {
     pub fn bits(&self) -> u8 {
-        self.clone().into_bytes()[0]
+        self.into_bits()
     }
 
     pub fn name_table_address(&self) -> u16 {
@@ -167,7 +164,7 @@ impl Control {
     }
 
     pub fn update(&mut self, bits: u8) {
-        self.bytes = [bits];
+        *self = Self::from_bits(bits);
     }
 }
 
@@ -179,11 +176,11 @@ impl Control {
 // ||+------- Sprite overflow flag
 // |+-------- Sprite 0 hit flag
 // +--------- Vblank flag, cleared on read.
-#[bitfield]
-#[derive(Clone)]
+#[bitfield(u8)]
 pub struct Status {
     #[allow(dead_code)]
-    unused: B5,
+    #[bits(5)]
+    unused: u8,
     pub sprite_overflow: bool,
     pub sprite_zero_hit: bool,
     pub vblank_started: bool,
@@ -225,7 +222,7 @@ impl Scroll {
 // ||+------- Emphasize red (green on PAL/Dendy)
 // |+-------- Emphasize green (red on PAL/Dendy)
 // +--------- Emphasize blue
-#[bitfield]
+#[bitfield(u8)]
 pub struct Mask {
     pub greyscale: bool,
     pub leftmost_8px_background: bool,
@@ -239,6 +236,6 @@ pub struct Mask {
 
 impl Mask {
     pub fn update(&mut self, bits: u8) {
-        self.bytes = [bits];
+        *self = Self::from_bits(bits);
     }
 }

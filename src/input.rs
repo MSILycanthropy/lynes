@@ -1,7 +1,6 @@
-use modular_bitfield::bitfield;
+use bitfield_struct::bitfield;
 
-#[bitfield]
-#[derive(Clone)]
+#[bitfield(u8)]
 pub struct ButtonState {
     pub a: bool,
     pub b: bool,
@@ -15,7 +14,7 @@ pub struct ButtonState {
 
 impl ButtonState {
     fn bits(&self) -> u8 {
-        *self.clone().into_bytes().first().unwrap()
+        self.into_bits()
     }
 
     pub fn clear(&mut self) {
@@ -34,7 +33,7 @@ impl Controller {
         Self {
             strobe: false,
             button_index: 0,
-            button_state: ButtonState::from_bytes([0]),
+            button_state: ButtonState::new(),
         }
     }
 

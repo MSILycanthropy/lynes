@@ -113,4 +113,8 @@ impl CpuBus {
 
         WriteEffect::None
     }
+
+    pub(crate) fn nmi_asserted(&self) -> bool {
+        self.ppu.nmi_asserted()
+    }
 }

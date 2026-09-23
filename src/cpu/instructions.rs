@@ -1,6 +1,6 @@
 use crate::NES;
 
-use super::{AddrMode, CPU};
+use super::AddrMode;
 
 macro_rules! instr {
     ($name: expr, $mode: expr, $cycles: expr, $len: expr, $fn: expr) => {

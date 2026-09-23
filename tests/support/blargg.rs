@@ -7,7 +7,6 @@ use std::{
 use lynes::{
     NES,
     cartridge::{Cartridge, ScreenMirroring},
-    cpu::CPU,
 };
 
 pub const DEFAULT_CYCLE_BUDGET: usize = 30_000_000;

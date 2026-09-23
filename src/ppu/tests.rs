@@ -1,7 +1,6 @@
 use crate::{
     Interrupt, NES,
     cartridge::{Cartridge, ScreenMirroring},
-    cpu::CPU,
     mapper::Mapper,
 };
 

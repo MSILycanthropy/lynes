@@ -1,4 +1,4 @@
-use lynes::{NES, cartridge::Cartridge, cpu::CPU, mapper::Mapper};
+use lynes::{NES, cartridge::Cartridge, mapper::Mapper};
 
 #[test]
 fn cpu_reads_preserve_16_and_32_kib_prg_mapping() {

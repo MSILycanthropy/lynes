@@ -1,6 +1,6 @@
 use std::fmt;
 
-use lynes::{NES, StepKind, cartridge::Cartridge, cpu::CPU};
+use lynes::{NES, StepKind, cartridge::Cartridge};
 
 const REFERENCE: &str = include_str!("fixtures/nestest/nestest.log");
 const ROM_PATH: &str = concat!(

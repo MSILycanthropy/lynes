@@ -2,7 +2,7 @@ use colored::Colorize;
 
 use crate::{
     NES,
-    cpu::{self, AddrMode, CPU},
+    cpu::{self, AddrMode},
 };
 
 const ILLEGAL_NOPS: [&'static str; 2] = ["DOP", "TOP"];

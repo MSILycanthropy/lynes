@@ -415,8 +415,7 @@ blargg_test!(
 blargg_test!(
     instr_test_v3_06_abs_xy,
     "instr_test_v3/06-abs_xy.nes",
-    120000000,
-    "baseline: Failed(1); 9C SYA abs,X; 9E SXA abs,Y"
+    120000000
 );
 blargg_test!(
     instr_test_v3_07_ind_x,
@@ -496,8 +495,7 @@ blargg_test!(
 blargg_test!(
     instr_test_v5_07_abs_xy,
     "instr_test_v5/07-abs_xy.nes",
-    120000000,
-    "baseline: Failed(1); 9C SYA abs,X; 9E SXA abs,Y"
+    120000000
 );
 blargg_test!(
     instr_test_v5_08_ind_x,
@@ -684,8 +682,7 @@ blargg_test!(
 blargg_test!(
     nes_instr_test_06_abs_xy,
     "nes_instr_test/06-abs_xy.nes",
-    120000000,
-    "baseline: Failed(1); 9C SYA abs,X; 9E SXA abs,Y"
+    120000000
 );
 blargg_test!(
     nes_instr_test_07_ind_x,

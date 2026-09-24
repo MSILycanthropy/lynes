@@ -975,16 +975,28 @@ fn sre(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
 }
 
 fn sxa(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
-    let addr = cpu.fetch_operand_address(bus, mode, AccessKind::Write);
-    let value = cpu.registers.x & ((addr >> 8) as u8 + 1);
-
-    cpu.poll_interrupts();
-    cpu.write(bus, addr, value);
+    store_high_masked(cpu, bus, mode, cpu.registers.x);
 }
 
 fn sya(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    store_high_masked(cpu, bus, mode, cpu.registers.y);
+}
+
+fn store_high_masked(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode, register: u8) {
+    let index = match mode {
+        AddrMode::AbsoluteX => cpu.registers.x,
+        AddrMode::AbsoluteY => cpu.registers.y,
+        _ => unreachable!("Invalid SHX/SHY addressing mode: {mode:?}"),
+    };
     let addr = cpu.fetch_operand_address(bus, mode, AccessKind::Write);
-    let value = cpu.registers.y & ((addr >> 8) as u8 + 1);
+    let base = addr.wrapping_sub(u16::from(index));
+    let value = register & ((base >> 8) as u8).wrapping_add(1);
+
+    let addr = if base & 0xFF00 != addr & 0xFF00 {
+        (u16::from(value) << 8) | (addr & 0x00FF)
+    } else {
+        addr
+    };
 
     cpu.poll_interrupts();
     cpu.write(bus, addr, value);
@@ -1092,6 +1104,73 @@ mod test {
     use crate::{NES, StepKind};
 
     use super::*;
+
+    #[test]
+    fn shx_and_shy_mask_the_literal_high_byte_and_corrupt_crossing_addresses() {
+        for opcode in [0x9C, 0x9E] {
+            for (base, index, register, destination, value) in [
+                (0x05E0u16, 0x1F, 0x03, 0x05FF, 0x02), // No crossing.
+                (0x05FF, 0x10, 0x03, 0x020F, 0x02),    // $060F becomes $020F.
+                (0x05FF, 0x10, 0xFF, 0x060F, 0x06),    // Mask uses $05 + 1.
+                (0xFFFF, 0x10, 0xFF, 0x000F, 0x00),    // Address and mask wrap.
+            ] {
+                let mut nes = NES::default();
+                nes.bus.cartridge.prg_rom = vec![0; 0x4000];
+                nes.bus.ram.fill(0xA5);
+                nes.bus.write(0x0700, opcode);
+                nes.bus.write(0x0701, base as u8);
+                nes.bus.write(0x0702, (base >> 8) as u8);
+                nes.cpu.registers.program_counter = 0x0700;
+                nes.cpu.registers.accumulator = 0xA5;
+                nes.cpu.registers.stack_pointer = 0xFD;
+                nes.cpu.registers.status.set_bits(0xEB);
+                let (x, y) = if opcode == 0x9C {
+                    (index, register)
+                } else {
+                    (register, index)
+                };
+                nes.cpu.registers.x = x;
+                nes.cpu.registers.y = y;
+                let mut expected_ram = nes.bus.ram;
+                expected_ram[destination] = value;
+
+                let step = nes.step();
+
+                assert_eq!(step.cpu_cycles, 5);
+                assert_eq!(nes.cpu.registers.program_counter, 0x0703);
+                assert_eq!(
+                    nes.bus.ram, expected_ram,
+                    "opcode {opcode:02X}, base {base:04X}"
+                );
+                assert_eq!(nes.cpu.registers.accumulator, 0xA5);
+                assert_eq!((nes.cpu.registers.x, nes.cpu.registers.y), (x, y));
+                assert_eq!(nes.cpu.registers.stack_pointer, 0xFD);
+                assert_eq!(nes.cpu.registers.status.bits(), 0xEB);
+            }
+        }
+    }
+
+    #[test]
+    fn shx_and_shy_keep_the_dummy_read_at_the_uncorrected_address() {
+        for opcode in [0x9C, 0x9E] {
+            let mut nes = NES::default();
+            nes.bus.write(0, opcode);
+            nes.bus.write(1, 0xFF);
+            nes.bus.write(2, 0x20);
+            nes.bus.ppu.registers.status.set_vblank_started(true);
+            let (x, y) = if opcode == 0x9C { (3, 1) } else { (1, 3) };
+            nes.cpu.registers.x = x;
+            nes.cpu.registers.y = y;
+
+            let step = nes.step();
+
+            assert_eq!(step.cpu_cycles, 5);
+            // $20FF + 3 reads $2002 before writing to the corrupted $0102.
+            assert!(!nes.bus.ppu.registers.status.vblank_started());
+            assert_eq!(nes.bus.ppu.peek_io_latch(), 0x80);
+            assert_eq!(nes.bus.peek(0x0102), 1);
+        }
+    }
 
     #[test]
     fn brk_saves_pc_plus_two_and_old_status_and_rti_skips_padding() {

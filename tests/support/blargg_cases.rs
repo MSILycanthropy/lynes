@@ -253,8 +253,7 @@ blargg_test!(
 blargg_test!(
     cpu_interrupts_v2_2_nmi_and_brk,
     "cpu_interrupts_v2/2-nmi_and_brk.nes",
-    30000000,
-    "baseline: Failed(1); NMI BRK 00"
+    30000000
 );
 blargg_test!(
     cpu_interrupts_v2_3_nmi_and_irq,

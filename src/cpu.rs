@@ -117,28 +117,23 @@ impl Cpu {
             self.run_oam_dma(bus, page, address);
         }
 
+        self.clock_cycle(bus);
         let value = bus.read(address);
 
-        // Temporary: preserve existing sampling until clocked accesses land.
         if (0x2000..=0x3FFF).contains(&address) && address & 0b111 == 2 {
             self.sample_nmi_input(bus.nmi_asserted());
         }
-
-        self.clock_cycle(bus);
 
         value
     }
 
     pub(crate) fn write(&mut self, bus: &mut CpuBus, address: u16, value: u8) {
+        self.clock_cycle(bus);
         let effect = bus.write(address, value);
 
-        // Preserve the current sampling workaround, including PPUCTRL mirrors,
-        // until interrupt sampling moves into the CPU cycle clocking path.
         if (0x2000..=0x3FFF).contains(&address) && address & 0b111 == 0 {
             self.sample_nmi_input(bus.nmi_asserted());
         }
-
-        self.clock_cycle(bus);
 
         if let WriteEffect::OamDma { page } = effect {
             bus.oam_dma_request = Some(page);
@@ -311,6 +306,179 @@ mod tests {
     use super::addressing::AccessKind;
     use super::*;
     use crate::StepKind;
+
+    #[test]
+    fn status_read_observes_vblank_starting_during_its_bus_cycle() {
+        let mut cpu = Cpu::default();
+        let mut bus = CpuBus::default();
+        bus.ppu.scanline = 241;
+        bus.ppu.dot = 0;
+        assert!(!bus.ppu.registers.status.vblank_started());
+
+        // The read completes at dot 3, after vblank starts at dot 1.
+        assert_eq!(cpu.read(&mut bus, 0x2002) & 0x80, 0x80);
+        assert_eq!(bus.total_cpu_cycles, 1);
+        assert_eq!((bus.ppu.scanline, bus.ppu.dot), (241, 3));
+        assert!(!bus.ppu.registers.status.vblank_started());
+    }
+
+    #[test]
+    fn control_write_enables_nmi_using_vblank_at_the_bus_access() {
+        for (scanline, initially_in_vblank, nmi_expected) in
+            [(241, false, true), (261, true, false)]
+        {
+            let mut cpu = Cpu::default();
+            let mut bus = CpuBus::default();
+            bus.ppu.scanline = scanline;
+            bus.ppu.dot = 0;
+            bus.ppu
+                .registers
+                .status
+                .set_vblank_started(initially_in_vblank);
+
+            // Vblank starts/ends before this write enables NMI at dot 3.
+            // Enabling at the beginning of the cycle would use the old flag.
+            cpu.write(&mut bus, 0x2000, 0x80);
+
+            assert_eq!(bus.total_cpu_cycles, 1);
+            assert_eq!((bus.ppu.scanline, bus.ppu.dot), (scanline, 3));
+            assert_eq!(bus.nmi_asserted(), nmi_expected);
+            assert_eq!(cpu.interrupt_state.nmi_pending, nmi_expected);
+        }
+    }
+
+    fn interrupt_hijack_machine(brk: bool, nmi_cycle: usize) -> NES {
+        let mut nes = NES::default();
+        nes.bus.cartridge.prg_rom = vec![0; 0x4000];
+        // Different low and high bytes expose any mixed-vector fetch.
+        nes.bus.cartridge.prg_rom[0x3FFA..0x3FFC].copy_from_slice(&[0x10, 0x07]);
+        nes.bus.cartridge.prg_rom[0x3FFE..0x4000].copy_from_slice(&[0x20, 0x06]);
+        nes.bus.write(0x0200, 0x00); // BRK, or the discarded opcode during IRQ.
+        nes.bus.write(0x0201, 0xEA); // BRK padding.
+        nes.bus.write(0x0620, 0xEA); // First IRQ-handler instruction.
+        nes.bus.write(0x0710, 0xEA); // First two NMI-handler instructions.
+        nes.bus.write(0x0711, 0xEA);
+        nes.cpu.registers.program_counter = 0x0200;
+        nes.cpu.registers.stack_pointer = 0xFD;
+        // BRK also verifies that I cannot prevent an NMI hijack.
+        nes.cpu
+            .registers
+            .status
+            .set_bits(if brk { 0xEF } else { 0xEB });
+        if !brk {
+            nes.cpu.interrupt_state.irq_asserted = true;
+            nes.cpu.poll_interrupts();
+        }
+        nes.bus.write(0x2000, 0x80);
+        nes.bus.ppu.scanline = 240;
+        // Vblank begins on the last PPU dot of the specified CPU cycle.
+        nes.bus.ppu.dot = 342 - 3 * nmi_cycle;
+        nes
+    }
+
+    #[test]
+    fn nmi_hijacks_brk_and_irq_through_cycle_four_without_changing_the_stack() {
+        for brk in [false, true] {
+            for nmi_cycle in 1..=4 {
+                let mut nes = interrupt_hijack_machine(brk, nmi_cycle);
+                let entry = nes.step();
+
+                if brk {
+                    assert!(matches!(
+                        entry.kind,
+                        StepKind::Instructrion { opcode: 0x00, .. }
+                    ));
+                } else {
+                    // StepKind records what started entry, even when redirected.
+                    assert!(matches!(entry.kind, StepKind::Interrupt(Interrupt::IRQ)));
+                }
+                assert_eq!(entry.cpu_cycles, 7);
+                assert_eq!(
+                    nes.cpu.registers.program_counter, 0x0710,
+                    "BRK={brk}, NMI in cycle {nmi_cycle}"
+                );
+                assert_eq!(nes.cpu.registers.stack_pointer, 0xFA);
+                assert_eq!(nes.bus.peek(0x01FD), 0x02);
+                assert_eq!(nes.bus.peek(0x01FC), if brk { 0x02 } else { 0x00 });
+                assert_eq!(nes.bus.peek(0x01FB), if brk { 0xFF } else { 0xEB });
+                assert_eq!(nes.cpu.registers.status.bits(), 0xEF);
+                assert!(nes.bus.nmi_asserted());
+                assert!(!nes.cpu.interrupt_state.nmi_pending);
+                assert!(nes.cpu.interrupt_state.accepted.is_none());
+                assert_eq!(nes.cpu.interrupt_state.irq_asserted, !brk);
+
+                // A held NMI line must not trigger another entry after the
+                // handler's first instruction polls it.
+                for expected_pc in [0x0710, 0x0711] {
+                    let nop = nes.step();
+                    assert!(matches!(nop.kind,
+                        StepKind::Instructrion { pc, opcode: 0xEA } if pc == expected_pc));
+                    assert_eq!(nop.cpu_cycles, 2);
+                    assert_eq!(nes.cpu.registers.program_counter, expected_pc + 1);
+                    assert_eq!(nes.cpu.registers.stack_pointer, 0xFA);
+                    assert!(!nes.cpu.interrupt_state.nmi_pending);
+                    assert!(nes.cpu.interrupt_state.accepted.is_none());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn nmi_after_hijack_cutoff_preserves_the_vector_and_waits_for_a_handler_poll() {
+        for brk in [false, true] {
+            for nmi_cycle in 5..=7 {
+                let mut nes = interrupt_hijack_machine(brk, nmi_cycle);
+                let entry = nes.step();
+
+                if brk {
+                    assert!(matches!(
+                        entry.kind,
+                        StepKind::Instructrion { opcode: 0x00, .. }
+                    ));
+                } else {
+                    assert!(matches!(entry.kind, StepKind::Interrupt(Interrupt::IRQ)));
+                }
+                assert_eq!(entry.cpu_cycles, 7);
+                assert_eq!(
+                    nes.cpu.registers.program_counter, 0x0620,
+                    "BRK={brk}, NMI in cycle {nmi_cycle}"
+                );
+                assert_eq!(nes.cpu.registers.stack_pointer, 0xFA);
+                assert_eq!(nes.bus.peek(0x01FD), 0x02);
+                assert_eq!(nes.bus.peek(0x01FC), if brk { 0x02 } else { 0x00 });
+                assert_eq!(nes.bus.peek(0x01FB), if brk { 0xFF } else { 0xEB });
+                assert_eq!(nes.cpu.registers.status.bits(), 0xEF);
+                assert!(nes.cpu.interrupt_state.nmi_pending);
+                assert!(nes.cpu.interrupt_state.accepted.is_none());
+
+                let nop = nes.step();
+                assert!(matches!(
+                    nop.kind,
+                    StepKind::Instructrion {
+                        pc: 0x0620,
+                        opcode: 0xEA
+                    }
+                ));
+                assert_eq!(nop.cpu_cycles, 2);
+                assert_eq!(nes.cpu.registers.program_counter, 0x0621);
+                assert!(matches!(
+                    nes.cpu.interrupt_state.accepted,
+                    Some(Interrupt::NMI)
+                ));
+
+                let nmi = nes.step();
+                assert!(matches!(nmi.kind, StepKind::Interrupt(Interrupt::NMI)));
+                assert_eq!(nmi.cpu_cycles, 7);
+                assert_eq!(nes.cpu.registers.program_counter, 0x0710);
+                assert_eq!(nes.cpu.registers.stack_pointer, 0xF7);
+                assert_eq!(nes.bus.peek(0x01FA), 0x06);
+                assert_eq!(nes.bus.peek(0x01F9), 0x21);
+                assert_eq!(nes.bus.peek(0x01F8), 0xEF);
+                assert!(!nes.cpu.interrupt_state.nmi_pending);
+                assert!(nes.cpu.interrupt_state.accepted.is_none());
+            }
+        }
+    }
 
     #[test]
     fn interrupt_entry_saves_pc_and_old_status_and_rti_restores_them() {

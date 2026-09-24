@@ -8,8 +8,6 @@ pub mod mapper;
 pub mod ppu;
 pub mod tv;
 
-use cpu::AddrMode;
-
 use crate::{
     cartridge::{Cartridge, ScreenMirroring},
     cpu::Cpu,
@@ -45,8 +43,6 @@ pub struct StepResult {
 }
 
 pub struct NES {
-    cpu_cycles: usize,
-    total_cpu_cycles: usize,
     pub cpu: Cpu,
     pub bus: CpuBus,
 }
@@ -54,8 +50,6 @@ pub struct NES {
 impl Default for NES {
     fn default() -> Self {
         Self {
-            cpu_cycles: 0,
-            total_cpu_cycles: 0,
             cpu: Cpu::default(),
             bus: CpuBus::default(),
         }
@@ -68,8 +62,11 @@ impl NES {
     }
 
     pub fn step(&mut self) -> StepResult {
-        let (kind, cpu_cycles) = self.execute_cpu_action();
-        let frame_ready = self.advance_cpu_cycles(cpu_cycles);
+        let before = self.bus.total_cpu_cycles;
+        let kind = self.execute_cpu_action();
+
+        let cpu_cycles = self.bus.total_cpu_cycles - before;
+        let frame_ready = std::mem::take(&mut self.bus.frame_pending);
 
         if frame_ready {
             self.render();
@@ -82,34 +79,20 @@ impl NES {
         }
     }
 
-    fn advance_cpu_cycles(&mut self, cpu_cycles: usize) -> bool {
-        let mut frame_ready = false;
-
-        for _ in 0..cpu_cycles {
-            self.total_cpu_cycles += 1;
-
-            for _ in 0..3 {
-                frame_ready |= self.bus.ppu.tick();
-                self.sample_interrupt_line();
-            }
-        }
-
-        frame_ready
-    }
-
-    fn execute_cpu_action(&mut self) -> (StepKind, usize) {
+    fn execute_cpu_action(&mut self) -> StepKind {
         if let Some(interrupt) = self.cpu.take_interrupt() {
-            let cycles = self.enter_interrupt(&interrupt);
+            self.enter_interrupt(&interrupt);
 
-            return (StepKind::Interrupt(interrupt), cycles);
+            return StepKind::Interrupt(interrupt);
         }
 
-        let (pc, opcode, cycles) = self.cpu.execute_next_instruction(&mut self.bus);
+        let (pc, opcode) = self.cpu.execute_next_instruction(&mut self.bus);
 
-        (StepKind::Instructrion { pc, opcode }, cycles)
+        StepKind::Instructrion { pc, opcode }
     }
 
     pub fn reset(&mut self) {
+        self.bus.oam_dma_request = None;
         self.cpu.registers.accumulator = 0;
         self.cpu.registers.x = 0;
         self.cpu.registers.y = 0;
@@ -118,8 +101,8 @@ impl NES {
         self.cpu.registers.status.set_bits(0b0010_0100);
         self.cpu.registers.program_counter = self.cpu_read_u16(0xFFFC);
 
-        self.cpu_cycles = 7;
-        self.total_cpu_cycles = 7;
+        self.bus.total_cpu_cycles = 7;
+        self.bus.frame_pending = false;
         self.bus.ppu.dot = 21;
     }
 
@@ -137,16 +120,9 @@ impl NES {
         update(&mut self.bus.controller.button_state);
     }
 
+    #[cfg(test)]
     fn sample_interrupt_line(&mut self) {
         let nmi_asserted = self.bus.ppu.nmi_asserted();
         self.cpu.sample_nmi_input(nmi_asserted);
-    }
-
-    pub fn get_operating_address(&mut self, mode: &AddrMode) -> (u16, bool) {
-        self.cpu.get_operating_address(&mut self.bus, mode)
-    }
-
-    pub fn get_absolute_address(&mut self, address: u16, mode: &AddrMode) -> (u16, bool) {
-        self.cpu.get_absolute_address(&mut self.bus, address, mode)
     }
 }

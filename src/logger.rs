@@ -25,15 +25,21 @@ fn instruction_log(nes: &NES) -> String {
     let opcode = nes.bus.peek(nes.cpu.registers.program_counter);
     let instruction = &cpu::instructions::INSTRUCTIONS_TABLE[opcode as usize];
 
-    let log = match instruction.len {
-        1 => format!("{:02X}", opcode),
-        2 => {
+    let log = match instruction.mode {
+        AddrMode::Implied | AddrMode::Accumulator => format!("{:02X}", opcode),
+        AddrMode::Immediate
+        | AddrMode::ZeroPage
+        | AddrMode::ZeroPageX
+        | AddrMode::ZeroPageY
+        | AddrMode::Relative
+        | AddrMode::IndirectX
+        | AddrMode::IndirectY => {
             let operand = nes
                 .bus
                 .peek(nes.cpu.registers.program_counter.wrapping_add(1));
             format!("{:02X} {:02X}", opcode, operand)
         }
-        3 => {
+        AddrMode::Absolute | AddrMode::AbsoluteX | AddrMode::AbsoluteY | AddrMode::Indirect => {
             let operand1 = nes
                 .bus
                 .peek(nes.cpu.registers.program_counter.wrapping_add(1));
@@ -42,7 +48,6 @@ fn instruction_log(nes: &NES) -> String {
                 .peek(nes.cpu.registers.program_counter.wrapping_add(2));
             format!("{:02X} {:02X} {:02X}", opcode, operand1, operand2)
         }
-        _ => unreachable!(),
     };
 
     if instruction.legal {
@@ -211,7 +216,7 @@ fn cpu_registers_log(nes: &NES) -> String {
         nes.cpu.registers.stack_pointer,
         nes.bus.ppu.scanline,
         nes.bus.ppu.dot,
-        nes.total_cpu_cycles,
+        nes.bus.total_cpu_cycles,
     )
 }
 

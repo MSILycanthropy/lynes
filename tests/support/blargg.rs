@@ -57,19 +57,19 @@ fn panic_message(payload: Box<dyn Any + Send>) -> String {
     }
 }
 
-fn status(nes: &mut NES) -> Option<u8> {
+fn status(nes: &NES) -> Option<u8> {
     let signature = [
-        nes.cpu_read(0x6001),
-        nes.cpu_read(0x6002),
-        nes.cpu_read(0x6003),
+        nes.bus.peek(0x6001),
+        nes.bus.peek(0x6002),
+        nes.bus.peek(0x6003),
     ];
-    (signature == [0xDE, 0xB0, 0x61]).then(|| nes.cpu_read(0x6000))
+    (signature == [0xDE, 0xB0, 0x61]).then(|| nes.bus.peek(0x6000))
 }
 
-fn diagnostic_text(nes: &mut NES) -> String {
+fn diagnostic_text(nes: &NES) -> String {
     let mut bytes = Vec::new();
     for address in 0x6004..=0x7FFF {
-        let byte = nes.cpu_read(address);
+        let byte = nes.bus.peek(address);
         if byte == 0 {
             return String::from_utf8_lossy(&bytes).into_owned();
         }
@@ -81,7 +81,7 @@ fn diagnostic_text(nes: &mut NES) -> String {
     )
 }
 
-fn report(nes: &mut NES, outcome: Outcome, cpu_cycles: usize, resets: usize) -> Report {
+fn report(nes: &NES, outcome: Outcome, cpu_cycles: usize, resets: usize) -> Report {
     let status = status(nes);
     let text = if status.is_some() {
         diagnostic_text(nes)
@@ -102,7 +102,7 @@ pub fn run_rom(path: &str, cycle_budget: usize) -> Report {
     match catch_unwind(|| Cartridge::load(path)) {
         Ok(cart) => run_cartridge(cart, cycle_budget),
         Err(error) => report(
-            &mut NES::default(),
+            &NES::default(),
             Outcome::LoadError(panic_message(error)),
             0,
             0,
@@ -122,7 +122,7 @@ fn run_cartridge(cart: Cartridge, cycle_budget: usize) -> Report {
     };
     let mut nes = NES::default();
     if let Some(reason) = unsupported {
-        return report(&mut nes, Outcome::UnsupportedCartridge(reason), 0, 0);
+        return report(&nes, Outcome::UnsupportedCartridge(reason), 0, 0);
     }
     nes.insert_cart(cart);
     nes.reset();
@@ -133,10 +133,10 @@ fn run_cartridge(cart: Cartridge, cycle_budget: usize) -> Report {
     let mut waiting_for_reset_ack = false;
 
     loop {
-        match status(&mut nes) {
-            Some(0) => return report(&mut nes, Outcome::Passed, cycles, resets),
+        match status(&nes) {
+            Some(0) => return report(&nes, Outcome::Passed, cycles, resets),
             Some(code @ 1..=0x7F) => {
-                return report(&mut nes, Outcome::Failed(code), cycles, resets);
+                return report(&nes, Outcome::Failed(code), cycles, resets);
             }
             Some(0x80) => {
                 reset_requested_at = None;
@@ -156,23 +156,23 @@ fn run_cartridge(cart: Cartridge, cycle_budget: usize) -> Report {
                     }
                 }
             }
-            Some(code) => return report(&mut nes, Outcome::InvalidStatus(code), cycles, resets),
+            Some(code) => return report(&nes, Outcome::InvalidStatus(code), cycles, resets),
             None => {}
         }
 
         // A CPU action may cross the budget by its own cycle cost; never start
         // another action after reaching the limit. Resets do not renew the budget.
         if cycles >= cycle_budget {
-            return report(&mut nes, Outcome::TimedOut, cycles, resets);
+            return report(&nes, Outcome::TimedOut, cycles, resets);
         }
         match catch_unwind(AssertUnwindSafe(|| nes.step())) {
             Ok(step) if step.cpu_cycles == 0 => {
-                return report(&mut nes, Outcome::NoProgress, cycles, resets);
+                return report(&nes, Outcome::NoProgress, cycles, resets);
             }
             Ok(step) => cycles += step.cpu_cycles,
             Err(error) => {
                 return report(
-                    &mut nes,
+                    &nes,
                     Outcome::EmulatorPanicked(panic_message(error)),
                     cycles,
                     resets,
@@ -299,19 +299,19 @@ mod tests {
     }
 
     #[test]
-    fn emulator_panic_is_distinct_from_rom_failure() {
-        // LDA $4018 still reads an unsupported CPU address; NROM writes are ignored.
-        let result = run_cartridge(cart(&[0xAD, 0x18, 0x40]), 100);
-        assert!(matches!(result.outcome, Outcome::EmulatorPanicked(_)));
+    fn open_bus_reads_do_not_report_an_emulator_panic() {
+        // LDA $4018; JMP $8000. Unmapped reads now return open bus.
+        let result = run_cartridge(cart(&[0xAD, 0x18, 0x40, 0x4C, 0x00, 0x80]), 100);
+        assert_eq!(result.outcome, Outcome::TimedOut);
     }
 
     #[test]
     fn diagnostic_read_stops_at_end_of_prg_ram() {
         let mut nes = NES::default();
         for address in 0x6004..=0x7FFF {
-            nes.cpu_write(address, b'x');
+            nes.bus.write(address, b'x');
         }
-        let text = diagnostic_text(&mut nes);
+        let text = diagnostic_text(&nes);
         assert!(text.starts_with(&"x".repeat(8192 - 4)));
         assert!(text.contains("unterminated diagnostic"));
     }
@@ -322,11 +322,11 @@ mod tests {
         nes.insert_cart(cart(&[]));
         let values = [(0x6000, 0x12), (0x6123, 0x34), (0x7FFF, 0x56)];
         for (address, value) in values {
-            nes.cpu_write(address, value);
+            nes.bus.write(address, value);
         }
         nes.reset();
         for (address, value) in values {
-            assert_eq!(nes.cpu_read(address), value);
+            assert_eq!(nes.bus.peek(address), value);
         }
     }
 

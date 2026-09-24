@@ -1,12 +1,10 @@
-use super::{AddrMode, Cpu, bus::CpuBus};
+use super::{AddrMode, Cpu, addressing::AccessKind, bus::CpuBus};
 
 macro_rules! instr {
-    ($name: expr, $mode: expr, $cycles: expr, $len: expr, $fn: expr) => {
+    ($name: expr, $mode: expr, $fn: expr) => {
         Instruction {
             name: $name,
             mode: $mode,
-            cycles: $cycles,
-            len: $len,
             operate: $fn,
             legal: true,
         }
@@ -14,12 +12,10 @@ macro_rules! instr {
 }
 
 macro_rules! il_instr {
-    ($name: expr, $mode: expr, $cycles: expr, $len: expr, $fn: expr) => {
+    ($name: expr, $mode: expr, $fn: expr) => {
         Instruction {
             name: $name,
             mode: $mode,
-            cycles: $cycles,
-            len: $len,
             operate: $fn,
             legal: false,
         }
@@ -27,313 +23,303 @@ macro_rules! il_instr {
 }
 
 pub(crate) const INSTRUCTIONS_TABLE: [Instruction; 256] = [
-    instr!("BRK", AddrMode::Implied, 7, 1, brk),
-    instr!("ORA", AddrMode::IndirectX, 6, 2, ora),
-    il_instr!("KIL", AddrMode::Implied, 2, 1, kil), // This technically is not correct, KIL explodes the CPU but we'll treat it as a NOP
-    il_instr!("SLO", AddrMode::IndirectX, 8, 2, slo),
-    il_instr!("DOP", AddrMode::ZeroPage, 3, 2, dop),
-    instr!("ORA", AddrMode::ZeroPage, 3, 2, ora),
-    instr!("ASL", AddrMode::ZeroPage, 5, 2, asl),
-    il_instr!("SLO", AddrMode::ZeroPage, 5, 2, slo),
-    instr!("PHP", AddrMode::Implied, 3, 1, php),
-    instr!("ORA", AddrMode::Immediate, 2, 2, ora),
-    instr!("ASL", AddrMode::Accumulator, 2, 1, asl),
-    il_instr!("ANC", AddrMode::Immediate, 2, 2, anc),
-    il_instr!("TOP", AddrMode::Absolute, 4, 3, top),
-    instr!("ORA", AddrMode::Absolute, 4, 3, ora),
-    instr!("ASL", AddrMode::Absolute, 6, 3, asl),
-    il_instr!("SLO", AddrMode::Absolute, 6, 3, slo),
-    instr!("BPL", AddrMode::Relative, 2, 2, bpl),
-    instr!("ORA", AddrMode::IndirectY, 5, 2, ora),
-    il_instr!("KIL", AddrMode::Implied, 2, 1, kil),
-    il_instr!("SLO", AddrMode::IndirectY, 8, 2, slo),
-    il_instr!("DOP", AddrMode::ZeroPageX, 4, 2, dop),
-    instr!("ORA", AddrMode::ZeroPageX, 4, 2, ora),
-    instr!("ASL", AddrMode::ZeroPageX, 6, 2, asl),
-    il_instr!("SLO", AddrMode::ZeroPageX, 6, 2, slo),
-    instr!("CLC", AddrMode::Implied, 2, 1, clc),
-    instr!("ORA", AddrMode::AbsoluteY, 4, 3, ora),
-    il_instr!("NOP", AddrMode::Implied, 2, 1, nop),
-    il_instr!("SLO", AddrMode::AbsoluteY, 7, 3, slo),
-    il_instr!("TOP", AddrMode::AbsoluteX, 4, 3, top),
-    instr!("ORA", AddrMode::AbsoluteX, 4, 3, ora),
-    instr!("ASL", AddrMode::AbsoluteX, 7, 3, asl),
-    il_instr!("SLO", AddrMode::AbsoluteX, 7, 3, slo),
-    instr!("JSR", AddrMode::Absolute, 6, 3, jsr),
-    instr!("AND", AddrMode::IndirectX, 6, 2, and),
-    il_instr!("KIL", AddrMode::Implied, 2, 1, kil),
-    il_instr!("RLA", AddrMode::IndirectX, 8, 2, rla),
-    instr!("BIT", AddrMode::ZeroPage, 3, 2, bit),
-    instr!("AND", AddrMode::ZeroPage, 3, 2, and),
-    instr!("ROL", AddrMode::ZeroPage, 5, 2, rol),
-    il_instr!("RLA", AddrMode::ZeroPage, 5, 2, rla),
-    instr!("PLP", AddrMode::Implied, 4, 1, plp),
-    instr!("AND", AddrMode::Immediate, 2, 2, and),
-    instr!("ROL", AddrMode::Accumulator, 2, 1, rol),
-    il_instr!("ANC", AddrMode::Immediate, 2, 2, anc),
-    instr!("BIT", AddrMode::Absolute, 4, 3, bit),
-    instr!("AND", AddrMode::Absolute, 4, 3, and),
-    instr!("ROL", AddrMode::Absolute, 6, 3, rol),
-    il_instr!("RLA", AddrMode::Absolute, 6, 3, rla),
-    instr!("BMI", AddrMode::Relative, 2, 2, bmi),
-    instr!("AND", AddrMode::IndirectY, 5, 2, and),
-    il_instr!("KIL", AddrMode::Implied, 2, 1, kil),
-    il_instr!("RLA", AddrMode::IndirectY, 8, 2, rla),
-    il_instr!("DOP", AddrMode::ZeroPageX, 4, 2, dop),
-    instr!("AND", AddrMode::ZeroPageX, 4, 2, and),
-    instr!("ROL", AddrMode::ZeroPageX, 6, 2, rol),
-    il_instr!("RLA", AddrMode::ZeroPageX, 6, 2, rla),
-    instr!("SEC", AddrMode::Implied, 2, 1, sec),
-    instr!("AND", AddrMode::AbsoluteY, 4, 3, and),
-    il_instr!("NOP", AddrMode::Implied, 2, 1, nop),
-    il_instr!("RLA", AddrMode::AbsoluteY, 7, 3, rla),
-    il_instr!("TOP", AddrMode::AbsoluteX, 4, 3, top),
-    instr!("AND", AddrMode::AbsoluteX, 4, 3, and),
-    instr!("ROL", AddrMode::AbsoluteX, 7, 3, rol),
-    il_instr!("RLA", AddrMode::AbsoluteX, 7, 3, rla),
-    instr!("RTI", AddrMode::Implied, 6, 1, rti),
-    instr!("EOR", AddrMode::IndirectX, 6, 2, eor),
-    il_instr!("KIL", AddrMode::Implied, 2, 1, kil),
-    il_instr!("SRE", AddrMode::IndirectX, 8, 2, sre),
-    il_instr!("DOP", AddrMode::ZeroPage, 3, 2, dop),
-    instr!("EOR", AddrMode::ZeroPage, 3, 2, eor),
-    instr!("LSR", AddrMode::ZeroPage, 5, 2, lsr),
-    il_instr!("SRE", AddrMode::ZeroPage, 5, 2, sre),
-    instr!("PHA", AddrMode::Implied, 3, 1, pha),
-    instr!("EOR", AddrMode::Immediate, 2, 2, eor),
-    instr!("LSR", AddrMode::Accumulator, 2, 1, lsr),
-    il_instr!("ASR", AddrMode::Immediate, 2, 2, asr),
-    instr!("JMP", AddrMode::Absolute, 3, 3, jmp),
-    instr!("EOR", AddrMode::Absolute, 4, 3, eor),
-    instr!("LSR", AddrMode::Absolute, 6, 3, lsr),
-    il_instr!("SRE", AddrMode::Absolute, 6, 3, sre),
-    instr!("BVC", AddrMode::Relative, 2, 2, bvc),
-    instr!("EOR", AddrMode::IndirectY, 5, 2, eor),
-    il_instr!("KIL", AddrMode::Implied, 2, 1, kil),
-    il_instr!("SRE", AddrMode::IndirectY, 8, 2, sre),
-    il_instr!("DOP", AddrMode::ZeroPageX, 4, 2, dop),
-    instr!("EOR", AddrMode::ZeroPageX, 4, 2, eor),
-    instr!("LSR", AddrMode::ZeroPageX, 6, 2, lsr),
-    il_instr!("SRE", AddrMode::ZeroPageX, 6, 2, sre),
-    instr!("CLI", AddrMode::Implied, 2, 1, cli),
-    instr!("EOR", AddrMode::AbsoluteY, 4, 3, eor),
-    il_instr!("NOP", AddrMode::Implied, 2, 1, nop),
-    il_instr!("SRE", AddrMode::AbsoluteY, 7, 3, sre),
-    il_instr!("TOP", AddrMode::AbsoluteX, 4, 3, top),
-    instr!("EOR", AddrMode::AbsoluteX, 4, 3, eor),
-    instr!("LSR", AddrMode::AbsoluteX, 7, 3, lsr),
-    il_instr!("SRE", AddrMode::AbsoluteX, 7, 3, sre),
-    instr!("RTS", AddrMode::Implied, 6, 1, rts),
-    instr!("ADC", AddrMode::IndirectX, 6, 2, adc),
-    il_instr!("KIL", AddrMode::Implied, 2, 1, kil),
-    il_instr!("RRA", AddrMode::IndirectX, 8, 2, rra),
-    il_instr!("DOP", AddrMode::ZeroPage, 3, 2, dop),
-    instr!("ADC", AddrMode::ZeroPage, 3, 2, adc),
-    instr!("ROR", AddrMode::ZeroPage, 5, 2, ror),
-    il_instr!("RRA", AddrMode::ZeroPage, 5, 2, rra),
-    instr!("PLA", AddrMode::Implied, 4, 1, pla),
-    instr!("ADC", AddrMode::Immediate, 2, 2, adc),
-    instr!("ROR", AddrMode::Accumulator, 2, 1, ror),
-    il_instr!("ARR", AddrMode::Immediate, 2, 2, arr),
-    instr!("JMP", AddrMode::Indirect, 5, 3, jmp),
-    instr!("ADC", AddrMode::Absolute, 4, 3, adc),
-    instr!("ROR", AddrMode::Absolute, 6, 3, ror),
-    il_instr!("RRA", AddrMode::Absolute, 6, 3, rra),
-    instr!("BVS", AddrMode::Relative, 2, 2, bvs),
-    instr!("ADC", AddrMode::IndirectY, 5, 2, adc),
-    il_instr!("KIL", AddrMode::Implied, 2, 1, kil),
-    il_instr!("RRA", AddrMode::IndirectY, 8, 2, rra),
-    il_instr!("DOP", AddrMode::ZeroPageX, 4, 2, dop),
-    instr!("ADC", AddrMode::ZeroPageX, 4, 2, adc),
-    instr!("ROR", AddrMode::ZeroPageX, 6, 2, ror),
-    il_instr!("RRA", AddrMode::ZeroPageX, 6, 2, rra),
-    instr!("SEI", AddrMode::Implied, 2, 1, sei),
-    instr!("ADC", AddrMode::AbsoluteY, 4, 3, adc),
-    il_instr!("NOP", AddrMode::Implied, 2, 1, nop),
-    il_instr!("RRA", AddrMode::AbsoluteY, 7, 3, rra),
-    il_instr!("TOP", AddrMode::AbsoluteX, 4, 3, top),
-    instr!("ADC", AddrMode::AbsoluteX, 4, 3, adc),
-    instr!("ROR", AddrMode::AbsoluteX, 7, 3, ror),
-    il_instr!("RRA", AddrMode::AbsoluteX, 7, 3, rra),
-    il_instr!("DOP", AddrMode::Immediate, 2, 2, dop),
-    instr!("STA", AddrMode::IndirectX, 6, 2, sta),
-    il_instr!("DOP", AddrMode::Immediate, 2, 2, dop),
-    il_instr!("SAX", AddrMode::IndirectX, 6, 2, sax),
-    instr!("STY", AddrMode::ZeroPage, 3, 2, sty),
-    instr!("STA", AddrMode::ZeroPage, 3, 2, sta),
-    instr!("STX", AddrMode::ZeroPage, 3, 2, stx),
-    il_instr!("SAX", AddrMode::ZeroPage, 3, 2, sax),
-    instr!("DEY", AddrMode::Implied, 2, 1, dey),
-    il_instr!("DOP", AddrMode::Immediate, 2, 2, dop),
-    instr!("TXA", AddrMode::Implied, 2, 1, txa),
-    il_instr!("XAA", AddrMode::Immediate, 2, 2, xaa),
-    instr!("STY", AddrMode::Absolute, 4, 3, sty),
-    instr!("STA", AddrMode::Absolute, 4, 3, sta),
-    instr!("STX", AddrMode::Absolute, 4, 3, stx),
-    il_instr!("SAX", AddrMode::Absolute, 4, 3, sax),
-    instr!("BCC", AddrMode::Relative, 2, 2, bcc),
-    instr!("STA", AddrMode::IndirectY, 6, 2, sta),
-    il_instr!("KIL", AddrMode::Implied, 2, 1, kil),
-    il_instr!("AXA", AddrMode::IndirectY, 6, 2, axa),
-    instr!("STY", AddrMode::ZeroPageX, 4, 2, sty),
-    instr!("STA", AddrMode::ZeroPageX, 4, 2, sta),
-    instr!("STX", AddrMode::ZeroPageY, 4, 2, stx),
-    il_instr!("SAX", AddrMode::ZeroPageY, 4, 2, sax),
-    instr!("TYA", AddrMode::Implied, 2, 1, tya),
-    instr!("STA", AddrMode::AbsoluteY, 5, 3, sta),
-    instr!("TXS", AddrMode::Implied, 2, 1, txs),
-    il_instr!("XAS", AddrMode::AbsoluteY, 5, 3, xas),
-    il_instr!("SYA", AddrMode::AbsoluteX, 5, 3, sya),
-    instr!("STA", AddrMode::AbsoluteX, 5, 3, sta),
-    il_instr!("SXA", AddrMode::AbsoluteY, 5, 3, sxa),
-    il_instr!("AXA", AddrMode::AbsoluteY, 5, 3, axa),
-    instr!("LDY", AddrMode::Immediate, 2, 2, ldy),
-    instr!("LDA", AddrMode::IndirectX, 6, 2, lda),
-    instr!("LDX", AddrMode::Immediate, 2, 2, ldx),
-    il_instr!("LAX", AddrMode::IndirectX, 6, 2, lax),
-    instr!("LDY", AddrMode::ZeroPage, 3, 2, ldy),
-    instr!("LDA", AddrMode::ZeroPage, 3, 2, lda),
-    instr!("LDX", AddrMode::ZeroPage, 3, 2, ldx),
-    il_instr!("LAX", AddrMode::ZeroPage, 3, 2, lax),
-    instr!("TAY", AddrMode::Implied, 2, 1, tay),
-    instr!("LDA", AddrMode::Immediate, 2, 2, lda),
-    instr!("TAX", AddrMode::Implied, 2, 1, tax),
-    il_instr!("LXA", AddrMode::Immediate, 2, 2, lxa),
-    instr!("LDY", AddrMode::Absolute, 4, 3, ldy),
-    instr!("LDA", AddrMode::Absolute, 4, 3, lda),
-    instr!("LDX", AddrMode::Absolute, 4, 3, ldx),
-    il_instr!("LAX", AddrMode::Absolute, 4, 3, lax),
-    instr!("BCS", AddrMode::Relative, 2, 2, bcs),
-    instr!("LDA", AddrMode::IndirectY, 5, 2, lda),
-    il_instr!("KIL", AddrMode::Implied, 2, 1, kil),
-    il_instr!("LAX", AddrMode::IndirectY, 5, 2, lax),
-    instr!("LDY", AddrMode::ZeroPageX, 4, 2, ldy),
-    instr!("LDA", AddrMode::ZeroPageX, 4, 2, lda),
-    instr!("LDX", AddrMode::ZeroPageY, 4, 2, ldx),
-    il_instr!("LAX", AddrMode::ZeroPageY, 4, 2, lax),
-    instr!("CLV", AddrMode::Implied, 2, 1, clv),
-    instr!("LDA", AddrMode::AbsoluteY, 4, 3, lda),
-    instr!("TSX", AddrMode::Implied, 2, 1, tsx),
-    il_instr!("LAS", AddrMode::AbsoluteY, 4, 3, las),
-    instr!("LDY", AddrMode::AbsoluteX, 4, 3, ldy),
-    instr!("LDA", AddrMode::AbsoluteX, 4, 3, lda),
-    instr!("LDX", AddrMode::AbsoluteY, 4, 3, ldx),
-    il_instr!("LAX", AddrMode::AbsoluteY, 4, 3, lax),
-    instr!("CPY", AddrMode::Immediate, 2, 2, cpy),
-    instr!("CMP", AddrMode::IndirectX, 6, 2, cmp),
-    il_instr!("DOP", AddrMode::Immediate, 2, 2, dop),
-    il_instr!("DCP", AddrMode::IndirectX, 8, 2, dcp),
-    instr!("CPY", AddrMode::ZeroPage, 3, 2, cpy),
-    instr!("CMP", AddrMode::ZeroPage, 3, 2, cmp),
-    instr!("DEC", AddrMode::ZeroPage, 5, 2, dec),
-    il_instr!("DCP", AddrMode::ZeroPage, 5, 2, dcp),
-    instr!("INY", AddrMode::Implied, 2, 1, iny),
-    instr!("CMP", AddrMode::Immediate, 2, 2, cmp),
-    instr!("DEX", AddrMode::Implied, 2, 1, dex),
-    il_instr!("AXS", AddrMode::Immediate, 2, 2, axs),
-    instr!("CPY", AddrMode::Absolute, 4, 3, cpy),
-    instr!("CMP", AddrMode::Absolute, 4, 3, cmp),
-    instr!("DEC", AddrMode::Absolute, 6, 3, dec),
-    il_instr!("DCP", AddrMode::Absolute, 6, 3, dcp),
-    instr!("BNE", AddrMode::Relative, 2, 2, bne),
-    instr!("CMP", AddrMode::IndirectY, 5, 2, cmp),
-    il_instr!("KIL", AddrMode::Implied, 2, 1, kil),
-    il_instr!("DCP", AddrMode::IndirectY, 8, 2, dcp),
-    il_instr!("DOP", AddrMode::ZeroPageX, 4, 2, dop),
-    instr!("CMP", AddrMode::ZeroPageX, 4, 2, cmp),
-    instr!("DEC", AddrMode::ZeroPageX, 6, 2, dec),
-    il_instr!("DCP", AddrMode::ZeroPageX, 6, 2, dcp),
-    instr!("CLD", AddrMode::Implied, 2, 1, cld),
-    instr!("CMP", AddrMode::AbsoluteY, 4, 3, cmp),
-    il_instr!("NOP", AddrMode::Implied, 2, 1, nop),
-    il_instr!("DCP", AddrMode::AbsoluteY, 7, 3, dcp),
-    il_instr!("TOP", AddrMode::AbsoluteX, 4, 3, top),
-    instr!("CMP", AddrMode::AbsoluteX, 4, 3, cmp),
-    instr!("DEC", AddrMode::AbsoluteX, 7, 3, dec),
-    il_instr!("DCP", AddrMode::AbsoluteX, 7, 3, dcp),
-    instr!("CPX", AddrMode::Immediate, 2, 2, cpx),
-    instr!("SBC", AddrMode::IndirectX, 6, 2, sbc),
-    il_instr!("DOP", AddrMode::Immediate, 2, 2, dop),
-    il_instr!("ISB", AddrMode::IndirectX, 8, 2, isb),
-    instr!("CPX", AddrMode::ZeroPage, 3, 2, cpx),
-    instr!("SBC", AddrMode::ZeroPage, 3, 2, sbc),
-    instr!("INC", AddrMode::ZeroPage, 5, 2, inc),
-    il_instr!("ISB", AddrMode::ZeroPage, 5, 2, isb),
-    instr!("INX", AddrMode::Implied, 2, 1, inx),
-    instr!("SBC", AddrMode::Immediate, 2, 2, sbc),
-    instr!("NOP", AddrMode::Implied, 2, 1, nop),
-    il_instr!("SBC", AddrMode::Immediate, 2, 2, sbc),
-    instr!("CPX", AddrMode::Absolute, 4, 3, cpx),
-    instr!("SBC", AddrMode::Absolute, 4, 3, sbc),
-    instr!("INC", AddrMode::Absolute, 6, 3, inc),
-    il_instr!("ISB", AddrMode::Absolute, 6, 3, isb),
-    instr!("BEQ", AddrMode::Relative, 2, 2, beq),
-    instr!("SBC", AddrMode::IndirectY, 5, 2, sbc),
-    il_instr!("KIL", AddrMode::Implied, 2, 1, kil),
-    il_instr!("ISB", AddrMode::IndirectY, 8, 2, isb),
-    il_instr!("DOP", AddrMode::ZeroPageX, 4, 2, dop),
-    instr!("SBC", AddrMode::ZeroPageX, 4, 2, sbc),
-    instr!("INC", AddrMode::ZeroPageX, 6, 2, inc),
-    il_instr!("ISB", AddrMode::ZeroPageX, 6, 2, isb),
-    instr!("SED", AddrMode::Implied, 2, 1, sed),
-    instr!("SBC", AddrMode::AbsoluteY, 4, 3, sbc),
-    il_instr!("NOP", AddrMode::Implied, 2, 1, nop),
-    il_instr!("ISB", AddrMode::AbsoluteY, 7, 3, isb),
-    il_instr!("TOP", AddrMode::AbsoluteX, 4, 3, top),
-    instr!("SBC", AddrMode::AbsoluteX, 4, 3, sbc),
-    instr!("INC", AddrMode::AbsoluteX, 7, 3, inc),
-    il_instr!("ISB", AddrMode::AbsoluteX, 7, 3, isb),
+    instr!("BRK", AddrMode::Implied, brk),
+    instr!("ORA", AddrMode::IndirectX, ora),
+    il_instr!("KIL", AddrMode::Implied, kil), // This technically is not correct, KIL explodes the CPU but we'll treat it as a NOP
+    il_instr!("SLO", AddrMode::IndirectX, slo),
+    il_instr!("DOP", AddrMode::ZeroPage, dop),
+    instr!("ORA", AddrMode::ZeroPage, ora),
+    instr!("ASL", AddrMode::ZeroPage, asl),
+    il_instr!("SLO", AddrMode::ZeroPage, slo),
+    instr!("PHP", AddrMode::Implied, php),
+    instr!("ORA", AddrMode::Immediate, ora),
+    instr!("ASL", AddrMode::Accumulator, asl),
+    il_instr!("ANC", AddrMode::Immediate, anc),
+    il_instr!("TOP", AddrMode::Absolute, top),
+    instr!("ORA", AddrMode::Absolute, ora),
+    instr!("ASL", AddrMode::Absolute, asl),
+    il_instr!("SLO", AddrMode::Absolute, slo),
+    instr!("BPL", AddrMode::Relative, bpl),
+    instr!("ORA", AddrMode::IndirectY, ora),
+    il_instr!("KIL", AddrMode::Implied, kil),
+    il_instr!("SLO", AddrMode::IndirectY, slo),
+    il_instr!("DOP", AddrMode::ZeroPageX, dop),
+    instr!("ORA", AddrMode::ZeroPageX, ora),
+    instr!("ASL", AddrMode::ZeroPageX, asl),
+    il_instr!("SLO", AddrMode::ZeroPageX, slo),
+    instr!("CLC", AddrMode::Implied, clc),
+    instr!("ORA", AddrMode::AbsoluteY, ora),
+    il_instr!("NOP", AddrMode::Implied, nop),
+    il_instr!("SLO", AddrMode::AbsoluteY, slo),
+    il_instr!("TOP", AddrMode::AbsoluteX, top),
+    instr!("ORA", AddrMode::AbsoluteX, ora),
+    instr!("ASL", AddrMode::AbsoluteX, asl),
+    il_instr!("SLO", AddrMode::AbsoluteX, slo),
+    instr!("JSR", AddrMode::Absolute, jsr),
+    instr!("AND", AddrMode::IndirectX, and),
+    il_instr!("KIL", AddrMode::Implied, kil),
+    il_instr!("RLA", AddrMode::IndirectX, rla),
+    instr!("BIT", AddrMode::ZeroPage, bit),
+    instr!("AND", AddrMode::ZeroPage, and),
+    instr!("ROL", AddrMode::ZeroPage, rol),
+    il_instr!("RLA", AddrMode::ZeroPage, rla),
+    instr!("PLP", AddrMode::Implied, plp),
+    instr!("AND", AddrMode::Immediate, and),
+    instr!("ROL", AddrMode::Accumulator, rol),
+    il_instr!("ANC", AddrMode::Immediate, anc),
+    instr!("BIT", AddrMode::Absolute, bit),
+    instr!("AND", AddrMode::Absolute, and),
+    instr!("ROL", AddrMode::Absolute, rol),
+    il_instr!("RLA", AddrMode::Absolute, rla),
+    instr!("BMI", AddrMode::Relative, bmi),
+    instr!("AND", AddrMode::IndirectY, and),
+    il_instr!("KIL", AddrMode::Implied, kil),
+    il_instr!("RLA", AddrMode::IndirectY, rla),
+    il_instr!("DOP", AddrMode::ZeroPageX, dop),
+    instr!("AND", AddrMode::ZeroPageX, and),
+    instr!("ROL", AddrMode::ZeroPageX, rol),
+    il_instr!("RLA", AddrMode::ZeroPageX, rla),
+    instr!("SEC", AddrMode::Implied, sec),
+    instr!("AND", AddrMode::AbsoluteY, and),
+    il_instr!("NOP", AddrMode::Implied, nop),
+    il_instr!("RLA", AddrMode::AbsoluteY, rla),
+    il_instr!("TOP", AddrMode::AbsoluteX, top),
+    instr!("AND", AddrMode::AbsoluteX, and),
+    instr!("ROL", AddrMode::AbsoluteX, rol),
+    il_instr!("RLA", AddrMode::AbsoluteX, rla),
+    instr!("RTI", AddrMode::Implied, rti),
+    instr!("EOR", AddrMode::IndirectX, eor),
+    il_instr!("KIL", AddrMode::Implied, kil),
+    il_instr!("SRE", AddrMode::IndirectX, sre),
+    il_instr!("DOP", AddrMode::ZeroPage, dop),
+    instr!("EOR", AddrMode::ZeroPage, eor),
+    instr!("LSR", AddrMode::ZeroPage, lsr),
+    il_instr!("SRE", AddrMode::ZeroPage, sre),
+    instr!("PHA", AddrMode::Implied, pha),
+    instr!("EOR", AddrMode::Immediate, eor),
+    instr!("LSR", AddrMode::Accumulator, lsr),
+    il_instr!("ASR", AddrMode::Immediate, asr),
+    instr!("JMP", AddrMode::Absolute, jmp),
+    instr!("EOR", AddrMode::Absolute, eor),
+    instr!("LSR", AddrMode::Absolute, lsr),
+    il_instr!("SRE", AddrMode::Absolute, sre),
+    instr!("BVC", AddrMode::Relative, bvc),
+    instr!("EOR", AddrMode::IndirectY, eor),
+    il_instr!("KIL", AddrMode::Implied, kil),
+    il_instr!("SRE", AddrMode::IndirectY, sre),
+    il_instr!("DOP", AddrMode::ZeroPageX, dop),
+    instr!("EOR", AddrMode::ZeroPageX, eor),
+    instr!("LSR", AddrMode::ZeroPageX, lsr),
+    il_instr!("SRE", AddrMode::ZeroPageX, sre),
+    instr!("CLI", AddrMode::Implied, cli),
+    instr!("EOR", AddrMode::AbsoluteY, eor),
+    il_instr!("NOP", AddrMode::Implied, nop),
+    il_instr!("SRE", AddrMode::AbsoluteY, sre),
+    il_instr!("TOP", AddrMode::AbsoluteX, top),
+    instr!("EOR", AddrMode::AbsoluteX, eor),
+    instr!("LSR", AddrMode::AbsoluteX, lsr),
+    il_instr!("SRE", AddrMode::AbsoluteX, sre),
+    instr!("RTS", AddrMode::Implied, rts),
+    instr!("ADC", AddrMode::IndirectX, adc),
+    il_instr!("KIL", AddrMode::Implied, kil),
+    il_instr!("RRA", AddrMode::IndirectX, rra),
+    il_instr!("DOP", AddrMode::ZeroPage, dop),
+    instr!("ADC", AddrMode::ZeroPage, adc),
+    instr!("ROR", AddrMode::ZeroPage, ror),
+    il_instr!("RRA", AddrMode::ZeroPage, rra),
+    instr!("PLA", AddrMode::Implied, pla),
+    instr!("ADC", AddrMode::Immediate, adc),
+    instr!("ROR", AddrMode::Accumulator, ror),
+    il_instr!("ARR", AddrMode::Immediate, arr),
+    instr!("JMP", AddrMode::Indirect, jmp),
+    instr!("ADC", AddrMode::Absolute, adc),
+    instr!("ROR", AddrMode::Absolute, ror),
+    il_instr!("RRA", AddrMode::Absolute, rra),
+    instr!("BVS", AddrMode::Relative, bvs),
+    instr!("ADC", AddrMode::IndirectY, adc),
+    il_instr!("KIL", AddrMode::Implied, kil),
+    il_instr!("RRA", AddrMode::IndirectY, rra),
+    il_instr!("DOP", AddrMode::ZeroPageX, dop),
+    instr!("ADC", AddrMode::ZeroPageX, adc),
+    instr!("ROR", AddrMode::ZeroPageX, ror),
+    il_instr!("RRA", AddrMode::ZeroPageX, rra),
+    instr!("SEI", AddrMode::Implied, sei),
+    instr!("ADC", AddrMode::AbsoluteY, adc),
+    il_instr!("NOP", AddrMode::Implied, nop),
+    il_instr!("RRA", AddrMode::AbsoluteY, rra),
+    il_instr!("TOP", AddrMode::AbsoluteX, top),
+    instr!("ADC", AddrMode::AbsoluteX, adc),
+    instr!("ROR", AddrMode::AbsoluteX, ror),
+    il_instr!("RRA", AddrMode::AbsoluteX, rra),
+    il_instr!("DOP", AddrMode::Immediate, dop),
+    instr!("STA", AddrMode::IndirectX, sta),
+    il_instr!("DOP", AddrMode::Immediate, dop),
+    il_instr!("SAX", AddrMode::IndirectX, sax),
+    instr!("STY", AddrMode::ZeroPage, sty),
+    instr!("STA", AddrMode::ZeroPage, sta),
+    instr!("STX", AddrMode::ZeroPage, stx),
+    il_instr!("SAX", AddrMode::ZeroPage, sax),
+    instr!("DEY", AddrMode::Implied, dey),
+    il_instr!("DOP", AddrMode::Immediate, dop),
+    instr!("TXA", AddrMode::Implied, txa),
+    il_instr!("XAA", AddrMode::Immediate, xaa),
+    instr!("STY", AddrMode::Absolute, sty),
+    instr!("STA", AddrMode::Absolute, sta),
+    instr!("STX", AddrMode::Absolute, stx),
+    il_instr!("SAX", AddrMode::Absolute, sax),
+    instr!("BCC", AddrMode::Relative, bcc),
+    instr!("STA", AddrMode::IndirectY, sta),
+    il_instr!("KIL", AddrMode::Implied, kil),
+    il_instr!("AXA", AddrMode::IndirectY, axa),
+    instr!("STY", AddrMode::ZeroPageX, sty),
+    instr!("STA", AddrMode::ZeroPageX, sta),
+    instr!("STX", AddrMode::ZeroPageY, stx),
+    il_instr!("SAX", AddrMode::ZeroPageY, sax),
+    instr!("TYA", AddrMode::Implied, tya),
+    instr!("STA", AddrMode::AbsoluteY, sta),
+    instr!("TXS", AddrMode::Implied, txs),
+    il_instr!("XAS", AddrMode::AbsoluteY, xas),
+    il_instr!("SYA", AddrMode::AbsoluteX, sya),
+    instr!("STA", AddrMode::AbsoluteX, sta),
+    il_instr!("SXA", AddrMode::AbsoluteY, sxa),
+    il_instr!("AXA", AddrMode::AbsoluteY, axa),
+    instr!("LDY", AddrMode::Immediate, ldy),
+    instr!("LDA", AddrMode::IndirectX, lda),
+    instr!("LDX", AddrMode::Immediate, ldx),
+    il_instr!("LAX", AddrMode::IndirectX, lax),
+    instr!("LDY", AddrMode::ZeroPage, ldy),
+    instr!("LDA", AddrMode::ZeroPage, lda),
+    instr!("LDX", AddrMode::ZeroPage, ldx),
+    il_instr!("LAX", AddrMode::ZeroPage, lax),
+    instr!("TAY", AddrMode::Implied, tay),
+    instr!("LDA", AddrMode::Immediate, lda),
+    instr!("TAX", AddrMode::Implied, tax),
+    il_instr!("LXA", AddrMode::Immediate, lxa),
+    instr!("LDY", AddrMode::Absolute, ldy),
+    instr!("LDA", AddrMode::Absolute, lda),
+    instr!("LDX", AddrMode::Absolute, ldx),
+    il_instr!("LAX", AddrMode::Absolute, lax),
+    instr!("BCS", AddrMode::Relative, bcs),
+    instr!("LDA", AddrMode::IndirectY, lda),
+    il_instr!("KIL", AddrMode::Implied, kil),
+    il_instr!("LAX", AddrMode::IndirectY, lax),
+    instr!("LDY", AddrMode::ZeroPageX, ldy),
+    instr!("LDA", AddrMode::ZeroPageX, lda),
+    instr!("LDX", AddrMode::ZeroPageY, ldx),
+    il_instr!("LAX", AddrMode::ZeroPageY, lax),
+    instr!("CLV", AddrMode::Implied, clv),
+    instr!("LDA", AddrMode::AbsoluteY, lda),
+    instr!("TSX", AddrMode::Implied, tsx),
+    il_instr!("LAS", AddrMode::AbsoluteY, las),
+    instr!("LDY", AddrMode::AbsoluteX, ldy),
+    instr!("LDA", AddrMode::AbsoluteX, lda),
+    instr!("LDX", AddrMode::AbsoluteY, ldx),
+    il_instr!("LAX", AddrMode::AbsoluteY, lax),
+    instr!("CPY", AddrMode::Immediate, cpy),
+    instr!("CMP", AddrMode::IndirectX, cmp),
+    il_instr!("DOP", AddrMode::Immediate, dop),
+    il_instr!("DCP", AddrMode::IndirectX, dcp),
+    instr!("CPY", AddrMode::ZeroPage, cpy),
+    instr!("CMP", AddrMode::ZeroPage, cmp),
+    instr!("DEC", AddrMode::ZeroPage, dec),
+    il_instr!("DCP", AddrMode::ZeroPage, dcp),
+    instr!("INY", AddrMode::Implied, iny),
+    instr!("CMP", AddrMode::Immediate, cmp),
+    instr!("DEX", AddrMode::Implied, dex),
+    il_instr!("AXS", AddrMode::Immediate, axs),
+    instr!("CPY", AddrMode::Absolute, cpy),
+    instr!("CMP", AddrMode::Absolute, cmp),
+    instr!("DEC", AddrMode::Absolute, dec),
+    il_instr!("DCP", AddrMode::Absolute, dcp),
+    instr!("BNE", AddrMode::Relative, bne),
+    instr!("CMP", AddrMode::IndirectY, cmp),
+    il_instr!("KIL", AddrMode::Implied, kil),
+    il_instr!("DCP", AddrMode::IndirectY, dcp),
+    il_instr!("DOP", AddrMode::ZeroPageX, dop),
+    instr!("CMP", AddrMode::ZeroPageX, cmp),
+    instr!("DEC", AddrMode::ZeroPageX, dec),
+    il_instr!("DCP", AddrMode::ZeroPageX, dcp),
+    instr!("CLD", AddrMode::Implied, cld),
+    instr!("CMP", AddrMode::AbsoluteY, cmp),
+    il_instr!("NOP", AddrMode::Implied, nop),
+    il_instr!("DCP", AddrMode::AbsoluteY, dcp),
+    il_instr!("TOP", AddrMode::AbsoluteX, top),
+    instr!("CMP", AddrMode::AbsoluteX, cmp),
+    instr!("DEC", AddrMode::AbsoluteX, dec),
+    il_instr!("DCP", AddrMode::AbsoluteX, dcp),
+    instr!("CPX", AddrMode::Immediate, cpx),
+    instr!("SBC", AddrMode::IndirectX, sbc),
+    il_instr!("DOP", AddrMode::Immediate, dop),
+    il_instr!("ISB", AddrMode::IndirectX, isb),
+    instr!("CPX", AddrMode::ZeroPage, cpx),
+    instr!("SBC", AddrMode::ZeroPage, sbc),
+    instr!("INC", AddrMode::ZeroPage, inc),
+    il_instr!("ISB", AddrMode::ZeroPage, isb),
+    instr!("INX", AddrMode::Implied, inx),
+    instr!("SBC", AddrMode::Immediate, sbc),
+    instr!("NOP", AddrMode::Implied, nop),
+    il_instr!("SBC", AddrMode::Immediate, sbc),
+    instr!("CPX", AddrMode::Absolute, cpx),
+    instr!("SBC", AddrMode::Absolute, sbc),
+    instr!("INC", AddrMode::Absolute, inc),
+    il_instr!("ISB", AddrMode::Absolute, isb),
+    instr!("BEQ", AddrMode::Relative, beq),
+    instr!("SBC", AddrMode::IndirectY, sbc),
+    il_instr!("KIL", AddrMode::Implied, kil),
+    il_instr!("ISB", AddrMode::IndirectY, isb),
+    il_instr!("DOP", AddrMode::ZeroPageX, dop),
+    instr!("SBC", AddrMode::ZeroPageX, sbc),
+    instr!("INC", AddrMode::ZeroPageX, inc),
+    il_instr!("ISB", AddrMode::ZeroPageX, isb),
+    instr!("SED", AddrMode::Implied, sed),
+    instr!("SBC", AddrMode::AbsoluteY, sbc),
+    il_instr!("NOP", AddrMode::Implied, nop),
+    il_instr!("ISB", AddrMode::AbsoluteY, isb),
+    il_instr!("TOP", AddrMode::AbsoluteX, top),
+    instr!("SBC", AddrMode::AbsoluteX, sbc),
+    instr!("INC", AddrMode::AbsoluteX, inc),
+    il_instr!("ISB", AddrMode::AbsoluteX, isb),
 ];
 
 pub struct Instruction {
     pub name: &'static str,
     pub mode: AddrMode,
-    pub cycles: usize,
-    pub len: u8,
-    pub operate: fn(&mut Cpu, &mut CpuBus, &AddrMode) -> usize,
+    pub operate: fn(&mut Cpu, &mut CpuBus, &AddrMode),
     pub legal: bool,
 }
 
 impl Instruction {
-    pub fn execute(&self, cpu: &mut Cpu, bus: &mut CpuBus) -> usize {
-        (self.operate)(cpu, bus, &self.mode) + self.cycles
-    }
-
-    pub fn size(&self) -> u16 {
-        (self.len - 1).into()
+    pub fn execute(&self, cpu: &mut Cpu, bus: &mut CpuBus) {
+        (self.operate)(cpu, bus, &self.mode);
     }
 }
 
-fn adc(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, page_crossed) = cpu.get_operating_address(bus, mode);
-    let value = cpu.read(bus, addr);
+fn adc(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let value = cpu.read_operand(bus, mode);
 
     add_to_accumulator(cpu, value);
-
-    page_crossed.into()
 }
 
-fn and(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, page_crossed) = cpu.get_operating_address(bus, mode);
-    let value = cpu.read(bus, addr);
+fn and(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let value = cpu.read_operand(bus, mode);
 
     set_accumulator(cpu, cpu.registers.accumulator & value);
-
-    page_crossed.into()
 }
 
-fn asl(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
+fn asl(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
     let old_value = if let AddrMode::Accumulator = mode {
+        cpu.read(bus, cpu.registers.program_counter);
         let old_value = cpu.registers.accumulator;
 
         set_accumulator(cpu, old_value << 1);
 
         old_value
     } else {
-        let (addr, _) = cpu.get_operating_address(bus, mode);
+        let addr = cpu.fetch_operand_address(bus, mode, AccessKind::ReadModifyWrite);
         let old_value = cpu.read(bus, addr);
         let result = old_value << 1;
 
+        cpu.write(bus, addr, old_value);
         cpu.write(bus, addr, result);
         update_zero_and_negative_flags(cpu, result);
 
@@ -341,224 +327,186 @@ fn asl(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
     };
 
     cpu.registers.status.set_carry(old_value >> 7 == 1);
-
-    0
 }
 
-fn bcc(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) -> usize {
-    branch(cpu, bus, !cpu.registers.status.carry())
+fn bcc(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    branch(cpu, bus, !cpu.registers.status.carry());
 }
 
-fn bcs(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) -> usize {
-    branch(cpu, bus, cpu.registers.status.carry())
+fn bcs(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    branch(cpu, bus, cpu.registers.status.carry());
 }
 
-fn beq(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) -> usize {
-    branch(cpu, bus, cpu.registers.status.zero())
+fn beq(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    branch(cpu, bus, cpu.registers.status.zero());
 }
 
-fn bit(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, _) = cpu.get_operating_address(bus, mode);
-    let value = cpu.read(bus, addr);
+fn bit(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let value = cpu.read_operand(bus, mode);
     let result = value & cpu.registers.accumulator;
 
     cpu.registers.status.set_zero(result == 0);
     cpu.registers.status.set_overflow(value & 0x40 > 0);
     cpu.registers.status.set_negative(value >> 7 == 1);
-
-    0
 }
 
-fn bmi(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) -> usize {
-    branch(cpu, bus, cpu.registers.status.negative())
+fn bmi(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    branch(cpu, bus, cpu.registers.status.negative());
 }
 
-fn bne(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) -> usize {
-    branch(cpu, bus, !cpu.registers.status.zero())
+fn bne(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    branch(cpu, bus, !cpu.registers.status.zero());
 }
 
-fn bpl(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) -> usize {
-    branch(cpu, bus, !cpu.registers.status.negative())
+fn bpl(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    branch(cpu, bus, !cpu.registers.status.negative());
 }
 
-fn brk(_cpu: &mut Cpu, _bus: &mut CpuBus, _mode: &AddrMode) -> usize {
+fn brk(_cpu: &mut Cpu, _bus: &mut CpuBus, _mode: &AddrMode) {
     // TODO: interrupts
     // std::process::exit(0);
-    0
 }
 
-fn bvc(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) -> usize {
-    branch(cpu, bus, !cpu.registers.status.overflow())
+fn bvc(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    branch(cpu, bus, !cpu.registers.status.overflow());
 }
 
-fn bvs(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) -> usize {
-    branch(cpu, bus, cpu.registers.status.overflow())
+fn bvs(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    branch(cpu, bus, cpu.registers.status.overflow());
 }
 
-fn clc(cpu: &mut Cpu, _bus: &mut CpuBus, _mode: &AddrMode) -> usize {
+fn clc(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.read(bus, cpu.registers.program_counter);
     cpu.registers.status.set_carry(false);
-
-    0
 }
 
-fn cld(cpu: &mut Cpu, _bus: &mut CpuBus, _mode: &AddrMode) -> usize {
+fn cld(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.read(bus, cpu.registers.program_counter);
     cpu.registers.status.set_decimal(false);
-
-    0
 }
 
-fn cli(cpu: &mut Cpu, _bus: &mut CpuBus, _mode: &AddrMode) -> usize {
+fn cli(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.read(bus, cpu.registers.program_counter);
     cpu.registers.status.set_interrupt_disable(false);
-
-    0
 }
 
-fn clv(cpu: &mut Cpu, _bus: &mut CpuBus, _mode: &AddrMode) -> usize {
+fn clv(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.read(bus, cpu.registers.program_counter);
     cpu.registers.status.set_overflow(false);
-
-    0
 }
 
-fn cmp(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, page_crossed) = cpu.get_operating_address(bus, mode);
-    let value = cpu.read(bus, addr);
+fn cmp(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let value = cpu.read_operand(bus, mode);
 
     compare(cpu, cpu.registers.accumulator, value);
-
-    page_crossed.into()
 }
 
-fn cpx(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, _) = cpu.get_operating_address(bus, mode);
-    let value = cpu.read(bus, addr);
+fn cpx(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let value = cpu.read_operand(bus, mode);
 
     compare(cpu, cpu.registers.x, value);
-
-    0
 }
 
-fn cpy(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, _) = cpu.get_operating_address(bus, mode);
-    let value = cpu.read(bus, addr);
+fn cpy(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let value = cpu.read_operand(bus, mode);
 
     compare(cpu, cpu.registers.y, value);
-
-    0
 }
 
-fn dec(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, _) = cpu.get_operating_address(bus, mode);
+fn dec(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let addr = cpu.fetch_operand_address(bus, mode, AccessKind::ReadModifyWrite);
     let old_value = cpu.read(bus, addr);
     let result = old_value.wrapping_sub(1);
 
+    cpu.write(bus, addr, old_value);
     cpu.write(bus, addr, result);
-    update_zero_and_negative_flags(cpu, result);
 
-    0
+    update_zero_and_negative_flags(cpu, result);
 }
 
-fn dex(cpu: &mut Cpu, _bus: &mut CpuBus, _mode: &AddrMode) -> usize {
+fn dex(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.read(bus, cpu.registers.program_counter);
     let result = cpu.registers.x.wrapping_sub(1);
 
     cpu.registers.x = result;
     update_zero_and_negative_flags(cpu, result);
-
-    0
 }
 
-fn dey(cpu: &mut Cpu, _bus: &mut CpuBus, _mode: &AddrMode) -> usize {
+fn dey(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.read(bus, cpu.registers.program_counter);
     let result = cpu.registers.y.wrapping_sub(1);
 
     cpu.registers.y = result;
     update_zero_and_negative_flags(cpu, result);
-
-    0
 }
 
-fn eor(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, page_crossed) = cpu.get_operating_address(bus, mode);
-    let value = cpu.read(bus, addr);
+fn eor(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let value = cpu.read_operand(bus, mode);
     let result = cpu.registers.accumulator ^ value;
 
     set_accumulator(cpu, result);
-
-    page_crossed.into()
 }
 
-fn inc(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, _) = cpu.get_operating_address(bus, mode);
+fn inc(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let addr = cpu.fetch_operand_address(bus, mode, AccessKind::ReadModifyWrite);
 
     increment_memory(cpu, bus, addr);
-
-    0
 }
 
-fn inx(cpu: &mut Cpu, _bus: &mut CpuBus, _mode: &AddrMode) -> usize {
+fn inx(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.read(bus, cpu.registers.program_counter);
     let result = cpu.registers.x.wrapping_add(1);
 
     cpu.registers.x = result;
     update_zero_and_negative_flags(cpu, result);
-
-    0
 }
 
-fn iny(cpu: &mut Cpu, _bus: &mut CpuBus, _mode: &AddrMode) -> usize {
+fn iny(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.read(bus, cpu.registers.program_counter);
     let result = cpu.registers.y.wrapping_add(1);
 
     cpu.registers.y = result;
     update_zero_and_negative_flags(cpu, result);
-
-    0
 }
 
-fn jmp(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, _) = cpu.get_operating_address(bus, mode);
+fn jmp(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let addr = cpu.fetch_operand_address(bus, mode, AccessKind::Read);
 
     cpu.registers.program_counter = addr;
-
-    0
 }
 
-fn jsr(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    cpu.stack_push_u16(bus, cpu.registers.program_counter + 2 - 1);
+fn jsr(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    let low = cpu.fetch_instruction_byte(bus);
+    let return_address = cpu.registers.program_counter;
 
-    let (addr, _) = cpu.get_operating_address(bus, mode);
+    dummy_stack_read(cpu, bus);
 
-    cpu.registers.program_counter = addr;
+    cpu.stack_push_u16(bus, return_address);
 
-    0
+    let high = cpu.fetch_instruction_byte(bus);
+    cpu.registers.program_counter = u16::from_le_bytes([low, high]);
 }
 
-fn lda(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, page_crossed) = cpu.get_operating_address(bus, mode);
-    let set = cpu.read(bus, addr);
+fn lda(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let set = cpu.read_operand(bus, mode);
 
     set_accumulator(cpu, set);
-
-    page_crossed.into()
 }
 
-fn ldx(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, page_crossed) = cpu.get_operating_address(bus, mode);
-
-    cpu.registers.x = cpu.read(bus, addr);
+fn ldx(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    cpu.registers.x = cpu.read_operand(bus, mode);
     update_zero_and_negative_flags(cpu, cpu.registers.x);
-
-    page_crossed.into()
 }
 
-fn ldy(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, page_crossed) = cpu.get_operating_address(bus, mode);
-
-    cpu.registers.y = cpu.read(bus, addr);
+fn ldy(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    cpu.registers.y = cpu.read_operand(bus, mode);
     update_zero_and_negative_flags(cpu, cpu.registers.y);
-
-    page_crossed.into()
 }
 
-fn lsr(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
+fn lsr(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
     let old_value = match mode {
         AddrMode::Accumulator => {
+            cpu.read(bus, cpu.registers.program_counter);
             let old_value = cpu.registers.accumulator;
 
             set_accumulator(cpu, old_value >> 1);
@@ -566,10 +514,11 @@ fn lsr(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
             old_value
         }
         _ => {
-            let (addr, _) = cpu.get_operating_address(bus, mode);
+            let addr = cpu.fetch_operand_address(bus, mode, AccessKind::ReadModifyWrite);
             let old_value = cpu.read(bus, addr);
             let result = old_value >> 1;
 
+            cpu.write(bus, addr, old_value);
             cpu.write(bus, addr, result);
             update_zero_and_negative_flags(cpu, result);
 
@@ -578,59 +527,55 @@ fn lsr(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
     };
 
     cpu.registers.status.set_carry(old_value & 1 == 1);
-
-    0
 }
 
-fn nop(_cpu: &mut Cpu, _bus: &mut CpuBus, _mode: &AddrMode) -> usize {
-    0
+fn nop(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.read(bus, cpu.registers.program_counter);
 }
 
-fn ora(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, page_crossed) = cpu.get_operating_address(bus, mode);
-    let value = cpu.read(bus, addr);
+fn ora(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let value = cpu.read_operand(bus, mode);
     let result = cpu.registers.accumulator | value;
 
     set_accumulator(cpu, result);
-
-    page_crossed.into()
 }
 
-fn pha(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) -> usize {
+fn pha(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.read(bus, cpu.registers.program_counter);
     cpu.stack_push(bus, cpu.registers.accumulator);
-
-    0
 }
 
-fn php(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) -> usize {
+fn php(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
     let mut status = cpu.registers.status.clone();
     status.set_b(0b11);
 
+    cpu.read(bus, cpu.registers.program_counter);
     cpu.stack_push(bus, status.bits());
-
-    0
 }
 
-fn pla(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) -> usize {
+fn pla(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.read(bus, cpu.registers.program_counter);
+    dummy_stack_read(cpu, bus);
+
     let result = cpu.stack_pop(bus);
 
     set_accumulator(cpu, result);
-
-    0
 }
 
-fn plp(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) -> usize {
+fn plp(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.read(bus, cpu.registers.program_counter);
+    dummy_stack_read(cpu, bus);
+
     let result = cpu.stack_pop(bus);
 
     cpu.registers.status.set_bits(result);
     cpu.registers.status.set_b(0b10);
-
-    0
 }
 
-fn rol(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
+fn rol(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
     let old_value = match mode {
         AddrMode::Accumulator => {
+            cpu.read(bus, cpu.registers.program_counter);
             let old_value = cpu.registers.accumulator;
             let result = (old_value << 1) | (cpu.registers.status.carry() as u8);
 
@@ -639,11 +584,13 @@ fn rol(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
             old_value
         }
         _ => {
-            let (addr, _) = cpu.get_operating_address(bus, mode);
+            let addr = cpu.fetch_operand_address(bus, mode, AccessKind::ReadModifyWrite);
             let old_value = cpu.read(bus, addr);
             let result = (old_value << 1) | (cpu.registers.status.carry() as u8);
 
+            cpu.write(bus, addr, old_value);
             cpu.write(bus, addr, result);
+
             update_zero_and_negative_flags(cpu, result);
 
             old_value
@@ -651,13 +598,12 @@ fn rol(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
     };
 
     cpu.registers.status.set_carry(old_value >> 7 == 1);
-
-    0
 }
 
-fn ror(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
+fn ror(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
     let old_value = match mode {
         AddrMode::Accumulator => {
+            cpu.read(bus, cpu.registers.program_counter);
             let old_value = cpu.registers.accumulator;
             let result = (old_value >> 1) | ((cpu.registers.status.carry() as u8) << 7);
 
@@ -666,10 +612,11 @@ fn ror(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
             old_value
         }
         _ => {
-            let (addr, _) = cpu.get_operating_address(bus, mode);
+            let addr = cpu.fetch_operand_address(bus, mode, AccessKind::ReadModifyWrite);
             let old_value = cpu.read(bus, addr);
             let result = (old_value >> 1) | ((cpu.registers.status.carry() as u8) << 7);
 
+            cpu.write(bus, addr, old_value);
             cpu.write(bus, addr, result);
             update_zero_and_negative_flags(cpu, result);
 
@@ -678,11 +625,12 @@ fn ror(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
     };
 
     cpu.registers.status.set_carry(old_value & 1 == 1);
-
-    0
 }
 
-fn rti(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) -> usize {
+fn rti(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.read(bus, cpu.registers.program_counter);
+    dummy_stack_read(cpu, bus);
+
     let status = cpu.stack_pop(bus);
     let program_counter = cpu.stack_pop_u16(bus);
 
@@ -690,120 +638,102 @@ fn rti(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) -> usize {
     cpu.registers.status.set_b(0b10);
 
     cpu.registers.program_counter = program_counter;
-
-    0
 }
 
-fn rts(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) -> usize {
-    let program_counter = cpu.stack_pop_u16(bus) + 1;
+fn rts(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.read(bus, cpu.registers.program_counter);
+    dummy_stack_read(cpu, bus);
 
-    cpu.registers.program_counter = program_counter;
+    let address = cpu.stack_pop_u16(bus);
 
-    0
+    cpu.read(bus, address);
+
+    cpu.registers.program_counter = address.wrapping_add(1);
 }
 
-fn sbc(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, page_crossed) = cpu.get_operating_address(bus, mode);
-    let temp = cpu.read(bus, addr);
+fn sbc(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let temp = cpu.read_operand(bus, mode);
     let value = temp.wrapping_neg().wrapping_sub(1);
 
     add_to_accumulator(cpu, value);
-
-    page_crossed.into()
 }
 
-fn sec(cpu: &mut Cpu, _bus: &mut CpuBus, _mode: &AddrMode) -> usize {
+fn sec(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.read(bus, cpu.registers.program_counter);
     cpu.registers.status.set_carry(true);
-
-    0
 }
 
-fn sed(cpu: &mut Cpu, _bus: &mut CpuBus, _mode: &AddrMode) -> usize {
+fn sed(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.read(bus, cpu.registers.program_counter);
     cpu.registers.status.set_decimal(true);
-
-    0
 }
 
-fn sei(cpu: &mut Cpu, _bus: &mut CpuBus, _mode: &AddrMode) -> usize {
+fn sei(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.read(bus, cpu.registers.program_counter);
     cpu.registers.status.set_interrupt_disable(true);
-
-    0
 }
 
-fn sta(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, _) = cpu.get_operating_address(bus, mode);
+fn sta(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let addr = cpu.fetch_operand_address(bus, mode, AccessKind::Write);
     let value = cpu.registers.accumulator;
 
     cpu.write(bus, addr, value);
-
-    0
 }
 
-fn stx(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, _) = cpu.get_operating_address(bus, mode);
+fn stx(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let addr = cpu.fetch_operand_address(bus, mode, AccessKind::Write);
     let value = cpu.registers.x;
 
     cpu.write(bus, addr, value);
-
-    0
 }
 
-fn sty(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, _) = cpu.get_operating_address(bus, mode);
+fn sty(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let addr = cpu.fetch_operand_address(bus, mode, AccessKind::Write);
     let value = cpu.registers.y;
 
     cpu.write(bus, addr, value);
-
-    0
 }
 
-fn tax(cpu: &mut Cpu, _bus: &mut CpuBus, _mode: &AddrMode) -> usize {
+fn tax(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.read(bus, cpu.registers.program_counter);
     cpu.registers.x = cpu.registers.accumulator;
 
     update_zero_and_negative_flags(cpu, cpu.registers.x);
-
-    0
 }
 
-fn tay(cpu: &mut Cpu, _bus: &mut CpuBus, _mode: &AddrMode) -> usize {
+fn tay(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.read(bus, cpu.registers.program_counter);
     cpu.registers.y = cpu.registers.accumulator;
 
     update_zero_and_negative_flags(cpu, cpu.registers.y);
-
-    0
 }
 
-fn tsx(cpu: &mut Cpu, _bus: &mut CpuBus, _mode: &AddrMode) -> usize {
+fn tsx(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.read(bus, cpu.registers.program_counter);
     cpu.registers.x = cpu.registers.stack_pointer;
 
     update_zero_and_negative_flags(cpu, cpu.registers.x);
-
-    0
 }
 
-fn txa(cpu: &mut Cpu, _bus: &mut CpuBus, _mode: &AddrMode) -> usize {
+fn txa(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.read(bus, cpu.registers.program_counter);
     set_accumulator(cpu, cpu.registers.x);
-
-    0
 }
 
-fn txs(cpu: &mut Cpu, _bus: &mut CpuBus, _mode: &AddrMode) -> usize {
+fn txs(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.read(bus, cpu.registers.program_counter);
     cpu.registers.stack_pointer = cpu.registers.x;
-
-    0
 }
 
-fn tya(cpu: &mut Cpu, _bus: &mut CpuBus, _mode: &AddrMode) -> usize {
+fn tya(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.read(bus, cpu.registers.program_counter);
     set_accumulator(cpu, cpu.registers.y);
-
-    0
 }
 
 // ILLEGAL INSTRUCTIONS
 
-fn anc(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, _) = cpu.get_operating_address(bus, mode);
-    let value = cpu.read(bus, addr);
+fn anc(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let value = cpu.read_operand(bus, mode);
 
     let result = cpu.registers.accumulator & value;
 
@@ -812,13 +742,10 @@ fn anc(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
     cpu.registers
         .status
         .set_carry(cpu.registers.status.negative());
-
-    0
 }
 
-fn arr(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, _) = cpu.get_operating_address(bus, mode);
-    let value = cpu.read(bus, addr);
+fn arr(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let value = cpu.read_operand(bus, mode);
 
     let result =
         ((cpu.registers.accumulator & value) >> 1) | ((cpu.registers.status.carry() as u8) << 7);
@@ -836,13 +763,11 @@ fn arr(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
         .status
         .set_overflow(fifth_bit ^ sixth_bit == 1);
     update_zero_and_negative_flags(cpu, accumulator);
-
-    0
 }
 
-fn asr(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, _) = cpu.get_operating_address(bus, mode);
-    let value = cpu.read(bus, addr);
+fn asr(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let addr = cpu.registers.program_counter;
+    let value = cpu.read_operand(bus, mode);
 
     let result = value >> 1;
 
@@ -851,22 +776,17 @@ fn asr(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
     cpu.registers.status.set_carry(value & 1 == 1);
 
     set_accumulator(cpu, result & cpu.registers.accumulator);
-
-    0
 }
 
-fn axa(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, _) = cpu.get_operating_address(bus, mode);
+fn axa(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let addr = cpu.fetch_operand_address(bus, mode, AccessKind::Write);
     let value = cpu.registers.x & cpu.registers.accumulator & (addr >> 8) as u8;
 
     cpu.write(bus, addr, value);
-
-    0
 }
 
-fn axs(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, _) = cpu.get_operating_address(bus, mode);
-    let value = cpu.read(bus, addr);
+fn axs(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let value = cpu.read_operand(bus, mode);
     let x_and_a = cpu.registers.x & cpu.registers.accumulator;
     let result = x_and_a.wrapping_sub(value);
 
@@ -876,188 +796,151 @@ fn axs(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
     update_zero_and_negative_flags(cpu, result);
 
     cpu.registers.x = result;
-
-    0
 }
 
-fn dcp(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, _) = cpu.get_operating_address(bus, mode);
+fn dcp(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let addr = cpu.fetch_operand_address(bus, mode, AccessKind::ReadModifyWrite);
     let value = cpu.read(bus, addr);
     let result = value.wrapping_sub(1);
 
+    cpu.write(bus, addr, value);
     cpu.write(bus, addr, result);
 
-    if result < cpu.registers.accumulator {
-        cpu.registers.status.set_carry(true);
-    }
-
-    update_zero_and_negative_flags(cpu, cpu.registers.accumulator.wrapping_sub(result));
-
-    0
+    compare(cpu, cpu.registers.accumulator, result);
 }
 
-fn dop(_cpu: &mut Cpu, _bus: &mut CpuBus, _mode: &AddrMode) -> usize {
-    0
+fn dop(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    cpu.read_operand(bus, mode);
 }
 
-fn isb(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, _) = cpu.get_operating_address(bus, mode);
+fn isb(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let addr = cpu.fetch_operand_address(bus, mode, AccessKind::ReadModifyWrite);
     let value = increment_memory(cpu, bus, addr);
     let result = (value as i8).wrapping_neg().wrapping_sub(1) as u8;
 
     add_to_accumulator(cpu, result);
-
-    0
 }
 
-fn kil(_cpu: &mut Cpu, _bus: &mut CpuBus, _mode: &AddrMode) -> usize {
-    0
-}
+fn kil(_cpu: &mut Cpu, _bus: &mut CpuBus, _mode: &AddrMode) {}
 
-fn las(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, page_crossed) = cpu.get_operating_address(bus, mode);
-    let value = cpu.read(bus, addr);
+fn las(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let value = cpu.read_operand(bus, mode);
     let result = cpu.registers.stack_pointer & value;
 
     set_accumulator(cpu, result);
     cpu.registers.x = result;
     cpu.registers.stack_pointer = result;
-
-    page_crossed.into()
 }
 
-fn lax(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, page_crossed) = cpu.get_operating_address(bus, mode);
-    let value = cpu.read(bus, addr);
+fn lax(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let value = cpu.read_operand(bus, mode);
 
     cpu.registers.x = value;
     set_accumulator(cpu, value);
-
-    page_crossed.into()
 }
 
-fn lxa(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, _) = cpu.get_operating_address(bus, mode);
-    let value = cpu.read(bus, addr);
+fn lxa(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let value = cpu.read_operand(bus, mode);
     let result = cpu.registers.accumulator & value;
 
     cpu.registers.x = result;
     set_accumulator(cpu, result);
-
-    0
 }
 
-fn rla(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, _) = cpu.get_operating_address(bus, mode);
+fn rla(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let addr = cpu.fetch_operand_address(bus, mode, AccessKind::ReadModifyWrite);
     let value = cpu.read(bus, addr);
     let result = (value << 1) | (cpu.registers.status.carry() as u8);
 
+    cpu.write(bus, addr, value);
     cpu.write(bus, addr, result);
 
     cpu.registers.status.set_carry(value >> 7 == 1);
 
     set_accumulator(cpu, cpu.registers.accumulator & result);
-
-    0
 }
 
-fn rra(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, _) = cpu.get_operating_address(bus, mode);
+fn rra(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let addr = cpu.fetch_operand_address(bus, mode, AccessKind::ReadModifyWrite);
     let value = cpu.read(bus, addr);
     let result = (value >> 1) | (cpu.registers.status.carry() as u8) << 7;
 
+    cpu.write(bus, addr, value);
     cpu.write(bus, addr, result);
 
     cpu.registers.status.set_carry(value & 1 == 1);
 
     add_to_accumulator(cpu, result);
-
-    0
 }
 
-fn sax(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, _) = cpu.get_operating_address(bus, mode);
+fn sax(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let addr = cpu.fetch_operand_address(bus, mode, AccessKind::Write);
 
     let result = cpu.registers.accumulator & cpu.registers.x;
 
     cpu.write(bus, addr, result);
-
-    0
 }
 
-fn slo(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, _) = cpu.get_operating_address(bus, mode);
+fn slo(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let addr = cpu.fetch_operand_address(bus, mode, AccessKind::ReadModifyWrite);
     let value = cpu.read(bus, addr);
     let result = value << 1;
 
+    cpu.write(bus, addr, value);
     cpu.write(bus, addr, result);
 
     cpu.registers.status.set_carry(value >> 7 == 1);
 
     set_accumulator(cpu, result | cpu.registers.accumulator);
-
-    0
 }
 
-fn sre(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, _) = cpu.get_operating_address(bus, mode);
+fn sre(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let addr = cpu.fetch_operand_address(bus, mode, AccessKind::ReadModifyWrite);
     let value = cpu.read(bus, addr);
     let result = value >> 1;
 
+    cpu.write(bus, addr, value);
     cpu.write(bus, addr, result);
 
     cpu.registers.status.set_carry(value & 1 == 1);
 
     set_accumulator(cpu, result ^ cpu.registers.accumulator);
-
-    0
 }
 
-fn sxa(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, _) = cpu.get_operating_address(bus, mode);
+fn sxa(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let addr = cpu.fetch_operand_address(bus, mode, AccessKind::Write);
     let value = cpu.registers.x & ((addr >> 8) as u8 + 1);
 
     cpu.write(bus, addr, value);
-
-    0
 }
 
-fn sya(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, _) = cpu.get_operating_address(bus, mode);
+fn sya(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let addr = cpu.fetch_operand_address(bus, mode, AccessKind::Write);
     let value = cpu.registers.y & ((addr >> 8) as u8 + 1);
 
     cpu.write(bus, addr, value);
-
-    0
 }
 
-fn top(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (_, page_crossed) = cpu.get_operating_address(bus, mode);
-
-    page_crossed.into()
+fn top(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    cpu.read_operand(bus, mode);
 }
 
 // This guy isn't super well documented, this seems like what it does?
-fn xaa(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
-    let (addr, _) = cpu.get_operating_address(bus, mode);
-    let value = cpu.read(bus, addr);
+fn xaa(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
+    let value = cpu.read_operand(bus, mode);
 
     set_accumulator(cpu, cpu.registers.x);
     set_accumulator(cpu, cpu.registers.accumulator & value);
-
-    0
 }
 
-fn xas(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) -> usize {
+fn xas(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
     let result = cpu.registers.x & cpu.registers.accumulator;
     cpu.registers.stack_pointer = result;
 
-    let (addr, _) = cpu.get_operating_address(bus, mode);
+    let addr = cpu.fetch_operand_address(bus, mode, AccessKind::Write);
     let value = result & ((addr >> 8) as u8 + 1);
 
     cpu.write(bus, addr, value);
-
-    0
 }
 
 fn add_to_accumulator(cpu: &mut Cpu, value: u8) {
@@ -1079,6 +962,7 @@ fn increment_memory(cpu: &mut Cpu, bus: &mut CpuBus, addr: u16) -> u8 {
     let old_value = cpu.read(bus, addr);
     let result = old_value.wrapping_add(1);
 
+    cpu.write(bus, addr, old_value);
     cpu.write(bus, addr, result);
     update_zero_and_negative_flags(cpu, result);
 
@@ -1096,26 +980,25 @@ fn update_zero_and_negative_flags(cpu: &mut Cpu, value: u8) {
     cpu.registers.status.set_negative(value >> 7 == 1);
 }
 
-fn branch(cpu: &mut Cpu, bus: &mut CpuBus, condition: bool) -> usize {
+fn branch(cpu: &mut Cpu, bus: &mut CpuBus, condition: bool) {
+    let offset = cpu.fetch_instruction_byte(bus) as i8;
+    let next_address = cpu.registers.program_counter;
+
     if !condition {
-        return 0;
+        return;
     }
 
-    let old_addr = cpu.registers.program_counter.wrapping_add(1);
+    cpu.read(bus, next_address);
 
-    let offset = cpu.read(bus, cpu.registers.program_counter) as i8;
-    let new_addr = old_addr.wrapping_add(offset as u16);
+    let target = next_address.wrapping_add_signed(i16::from(offset));
 
-    // TODO: For some rason this fucks stuff up? Docs say this is how it should work tho
-    let cycles = if old_addr & 0xFF00 != new_addr & 0xFF00 {
-        2
-    } else {
-        1
-    };
+    if next_address & 0xFF00 != target & 0xFF00 {
+        let dummy_address = (next_address & 0xFF00) | (target & 0x00FF);
 
-    cpu.registers.program_counter = new_addr;
+        cpu.read(bus, dummy_address);
+    }
 
-    cycles
+    cpu.registers.program_counter = target;
 }
 
 fn compare(cpu: &mut Cpu, register: u8, value: u8) {
@@ -1125,6 +1008,12 @@ fn compare(cpu: &mut Cpu, register: u8, value: u8) {
     update_zero_and_negative_flags(cpu, result);
 }
 
+fn dummy_stack_read(cpu: &mut Cpu, bus: &mut CpuBus) {
+    let stack_address: u16 = 0x0100 | u16::from(cpu.registers.stack_pointer);
+
+    cpu.read(bus, stack_address);
+}
+
 #[cfg(test)]
 mod test {
     use crate::NES;
@@ -1132,12 +1021,55 @@ mod test {
     use super::*;
 
     #[test]
+    fn lsr_accumulator_uses_two_cycles_without_writing_memory() {
+        let mut nes = NES::default();
+        nes.bus.write(0x0000, 0x4A); // LSR A
+        nes.bus.write(0x0001, 0xEA);
+        nes.cpu.registers.accumulator = 0x01;
+        nes.cpu.registers.status.set_negative(true);
+
+        let result = nes.step();
+
+        assert_eq!(result.cpu_cycles, 2);
+        assert_eq!(nes.cpu.registers.program_counter, 1);
+        assert_eq!(nes.cpu.registers.accumulator, 0);
+        assert!(nes.cpu.registers.status.carry());
+        assert!(nes.cpu.registers.status.zero());
+        assert!(!nes.cpu.registers.status.negative());
+        assert_eq!(nes.bus.peek(0x0000), 0x4A);
+        assert_eq!(nes.bus.peek(0x0001), 0xEA);
+    }
+
+    #[test]
+    fn lsr_memory_writes_original_then_shifted_value_to_io() {
+        let mut nes = NES::default();
+        nes.bus.write(0x0000, 0x4E); // LSR $2004 (OAMDATA)
+        nes.bus.write(0x0001, 0x04);
+        nes.bus.write(0x0002, 0x20);
+        nes.bus.write(0x2003, 0xFF);
+        nes.bus.ppu.oam_data[0xFF] = 0x03;
+        nes.cpu.registers.accumulator = 0xA5;
+
+        let result = nes.step();
+
+        assert_eq!(result.cpu_cycles, 6);
+        assert_eq!(nes.cpu.registers.program_counter, 3);
+        assert_eq!(nes.cpu.registers.accumulator, 0xA5);
+        // Each write to OAMDATA increments OAMADDR, exposing both writes.
+        assert_eq!(nes.bus.ppu.oam_data[0xFF], 0x03);
+        assert_eq!(nes.bus.ppu.oam_data[0x00], 0x01);
+        assert!(nes.cpu.registers.status.carry());
+        assert!(!nes.cpu.registers.status.zero());
+        assert!(!nes.cpu.registers.status.negative());
+    }
+
+    #[test]
     fn lda_sets_accumulator() {
         let mut nes = NES::default();
 
         nes.cpu.registers.accumulator = 0x00;
         nes.cpu.registers.program_counter += 1;
-        nes.cpu_write(0x0001, 0x01);
+        nes.bus.write(0x0001, 0x01);
 
         lda(&mut nes.cpu, &mut nes.bus, &AddrMode::Immediate);
 
@@ -1150,7 +1082,7 @@ mod test {
 
         nes.cpu.registers.accumulator = 0x00;
         nes.cpu.registers.program_counter += 1;
-        nes.cpu_write(0x0001, 0x00);
+        nes.bus.write(0x0001, 0x00);
 
         lda(&mut nes.cpu, &mut nes.bus, &AddrMode::Immediate);
 
@@ -1164,7 +1096,7 @@ mod test {
 
         nes.cpu.registers.accumulator = 0x00;
         nes.cpu.registers.program_counter += 1;
-        nes.cpu_write(0x0001, 0xFF);
+        nes.bus.write(0x0001, 0xFF);
 
         lda(&mut nes.cpu, &mut nes.bus, &AddrMode::Immediate);
 

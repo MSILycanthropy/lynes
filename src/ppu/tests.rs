@@ -15,29 +15,30 @@ fn cartridge(mirroring: ScreenMirroring) -> Cartridge {
     }
 }
 
+// These helpers exercise PPU register behavior without advancing CPU/PPU time.
 fn set_vram_address(nes: &mut NES, address: u16) {
-    nes.cpu_read(0x2002); // Start with the first PPUADDR write.
-    nes.cpu_write(0x2006, (address >> 8) as u8);
-    nes.cpu_write(0x2006, address as u8);
+    nes.bus.read(0x2002); // Start with the first PPUADDR write.
+    nes.bus.write(0x2006, (address >> 8) as u8);
+    nes.bus.write(0x2006, address as u8);
 }
 
 fn write_vram(nes: &mut NES, address: u16, value: u8) {
     set_vram_address(nes, address);
-    nes.cpu_write(0x2007, value);
+    nes.bus.write(0x2007, value);
 }
 
 fn read_nametable(nes: &mut NES, address: u16) -> u8 {
     set_vram_address(nes, address);
-    nes.cpu_read(0x2007); // Discard the previous buffered value.
+    nes.bus.read(0x2007); // Discard the previous buffered value.
     // Stay in nametable space even when testing the last byte at $3EFF.
     set_vram_address(nes, address);
-    nes.cpu_read(0x2007)
+    nes.bus.read(0x2007)
 }
 
 fn read_palette_color(nes: &mut NES, address: u16) -> u8 {
     set_vram_address(nes, address);
     // Storage/mirroring checks compare color bits; upper bits come from the I/O latch.
-    nes.cpu_read(0x2007) & 0x3F
+    nes.bus.read(0x2007) & 0x3F
 }
 
 #[test]
@@ -45,17 +46,17 @@ fn status_writes_latch_data_without_changing_flags_or_scroll_toggle() {
     let mut nes = NES::default();
     nes.bus.ppu.registers.status.set_vblank_started(true);
     nes.bus.ppu.registers.status.set_sprite_zero_hit(true);
-    nes.cpu_write(0x2005, 0x12);
+    nes.bus.write(0x2005, 0x12);
 
-    nes.cpu_write(0x3FFA, 0x1B); // Mirrored PPUSTATUS write.
+    nes.bus.write(0x3FFA, 0x1B); // Mirrored PPUSTATUS write.
     assert_eq!(nes.bus.peek(0x2000), 0x1B);
     assert_eq!(nes.bus.peek(0x2002), 0xDB);
     assert_eq!(nes.bus.peek(0x2000), 0x1B); // Status peek doesn't latch its result.
 
-    nes.cpu_write(0x2005, 0x34);
+    nes.bus.write(0x2005, 0x34);
     assert_eq!(nes.bus.ppu.registers.scroll.scroll_x(), 0x12);
     assert_eq!(nes.bus.ppu.registers.scroll.scroll_y(), 0x34);
-    assert_eq!(nes.cpu_read(0x2002), 0xD4);
+    assert_eq!(nes.bus.read(0x2002), 0xD4);
     assert_eq!(nes.bus.peek(0x2000), 0xD4); // Latches status before clearing vblank.
     assert_eq!(nes.bus.peek(0x2002), 0x54);
 }
@@ -69,16 +70,16 @@ fn data_and_oam_reads_latch_returned_bytes_but_peeks_do_not() {
 
     assert_eq!(nes.bus.peek(0x2007), 0xA6);
     assert_eq!(nes.bus.peek(0x2000), 0);
-    assert_eq!(nes.cpu_read(0x2007), 0xA6);
+    assert_eq!(nes.bus.read(0x2007), 0xA6);
     assert_eq!(nes.bus.peek(0x2000), 0xA6);
     assert_eq!(nes.bus.ppu.read_buffer, 0x39); // Refill is separate from the I/O latch.
 
     nes.bus.ppu.oam_data[0] = 0xCA;
-    nes.cpu_write(0x2003, 0);
-    nes.cpu_write(0x2002, 0x5B);
+    nes.bus.write(0x2003, 0);
+    nes.bus.write(0x2002, 0x5B);
     assert_eq!(nes.bus.peek(0x2004), 0xCA);
     assert_eq!(nes.bus.peek(0x2000), 0x5B);
-    assert_eq!(nes.cpu_read(0x2004), 0xCA);
+    assert_eq!(nes.bus.read(0x2004), 0xCA);
     assert_eq!(nes.bus.peek(0x2000), 0xCA);
     assert_eq!(nes.bus.ppu.registers.oam_addr, 0);
 }
@@ -91,8 +92,8 @@ fn palette_reads_combine_latch_bits_and_greyscale_while_refilling_buffer() {
             write_vram(&mut nes, 0x2F00, 0x9A);
             write_vram(&mut nes, 0x3F00, 0x2F);
             set_vram_address(&mut nes, 0x3F00);
-            nes.cpu_write(0x2001, u8::from(greyscale));
-            nes.cpu_write(0x2002, upper_bits | 0x15);
+            nes.bus.write(0x2001, u8::from(greyscale));
+            nes.bus.write(0x2002, upper_bits | 0x15);
             nes.bus.ppu.read_buffer = 0x55;
             let expected = upper_bits | if greyscale { 0x20 } else { 0x2F };
 
@@ -101,14 +102,14 @@ fn palette_reads_combine_latch_bits_and_greyscale_while_refilling_buffer() {
             assert_eq!(nes.bus.ppu.read_buffer, 0x55);
             assert_eq!(nes.bus.ppu.registers.scroll.memory_address(), 0x3F00);
 
-            assert_eq!(nes.cpu_read(0x2007), expected);
+            assert_eq!(nes.bus.read(0x2007), expected);
             assert_eq!(nes.bus.peek(0x2000), expected);
             assert_eq!(nes.bus.ppu.palette_table[0], 0x2F);
             assert_eq!(nes.bus.ppu.registers.scroll.memory_address(), 0x3F01);
             assert_eq!(nes.bus.ppu.read_buffer, 0x9A);
 
             set_vram_address(&mut nes, 0x2000);
-            assert_eq!(nes.cpu_read(0x2007), 0x9A);
+            assert_eq!(nes.bus.read(0x2007), 0x9A);
         }
     }
 }
@@ -122,13 +123,13 @@ fn cartridge_chr_reads_stay_buffered_and_rom_writes_are_ignored() {
     nes.insert_cart(cart);
 
     set_vram_address(&mut nes, 0);
-    assert_eq!(nes.cpu_read(0x2007), 0);
-    assert_eq!(nes.cpu_read(0x2007), 0x12);
+    assert_eq!(nes.bus.read(0x2007), 0);
+    assert_eq!(nes.bus.read(0x2007), 0x12);
 
     write_vram(&mut nes, 0x1FFF, 0xFF);
     set_vram_address(&mut nes, 0x1FFF);
-    nes.cpu_read(0x2007);
-    assert_eq!(nes.cpu_read(0x2007), 0x34);
+    nes.bus.read(0x2007);
+    assert_eq!(nes.bus.read(0x2007), 0x34);
 }
 
 #[test]
@@ -139,7 +140,7 @@ fn renderer_reads_background_and_sprite_patterns_from_cartridge() {
     cart.chr_rom[0x1018..0x1020].fill(0xFF);
     let mut nes = NES::default();
     nes.insert_cart(cart);
-    nes.cpu_write(0x2000, 0x08);
+    nes.bus.write(0x2000, 0x08);
     nes.bus.ppu.palette_table[1] = 1;
     nes.bus.ppu.palette_table[0x12] = 2;
     nes.bus.ppu.oam_data[..4].copy_from_slice(&[16, 1, 0, 16]);
@@ -325,9 +326,9 @@ fn palette_boundary_does_not_use_nametable_mapping_or_buffering() {
 
     assert_eq!(read_nametable(&mut nes, 0x2EFF), 0xA5);
     set_vram_address(&mut nes, 0x3F00);
-    assert_eq!(nes.cpu_read(0x2007), 0x12);
+    assert_eq!(nes.bus.read(0x2007), 0x12);
     set_vram_address(&mut nes, 0x3F1F);
-    assert_eq!(nes.cpu_read(0x2007), 0x23);
+    assert_eq!(nes.bus.read(0x2007), 0x23);
     assert_eq!(read_nametable(&mut nes, 0x3EFF), 0xA5);
 }
 
@@ -359,7 +360,7 @@ fn vblank_starts_at_scanline_241_dot_1() {
         let mut nes = NES::default();
         nes.bus.ppu.scanline = 240;
         nes.bus.ppu.dot = 340;
-        nes.cpu_write(0x2000, if nmi_enabled { 0x80 } else { 0 });
+        nes.bus.write(0x2000, if nmi_enabled { 0x80 } else { 0 });
 
         assert!(!nes.bus.ppu.tick());
         nes.sample_interrupt_line();
@@ -391,8 +392,9 @@ fn pre_render_dot_1_clears_flags_but_preserves_pending_interrupts() {
     nes.bus.ppu.registers.status.set_vblank_started(true);
     nes.bus.ppu.registers.status.set_sprite_zero_hit(true);
     nes.bus.ppu.registers.status.set_sprite_overflow(true);
-    // Assert the PPU output and let the CPU latch it; leave it unconsumed.
-    nes.cpu_write(0x2000, 0x80);
+    // Assert the PPU output without advancing past the boundary under test.
+    nes.bus.write(0x2000, 0x80);
+    nes.sample_interrupt_line();
     assert!(nes.bus.ppu.nmi_asserted());
 
     assert!(!nes.bus.ppu.tick());
@@ -448,7 +450,7 @@ fn status_read_preserves_latched_nmi_and_allows_next_vblank_edge() {
     nes.bus.ppu.dot = 0;
 
     // Exercise the machine's sampling loop, not just the test's manual wiring.
-    nes.advance_cpu_cycles(1);
+    nes.cpu.clock_cycle(&mut nes.bus);
     assert!(nes.bus.ppu.nmi_asserted());
     assert_eq!(nes.cpu_read(0x2002) & 0x80, 0x80);
     assert!(!nes.bus.ppu.nmi_asserted());
@@ -459,9 +461,9 @@ fn status_read_preserves_latched_nmi_and_allows_next_vblank_edge() {
     // the status read itself must have delivered the deasserted line.
     nes.bus.ppu.scanline = 241;
     nes.bus.ppu.dot = 0;
-    nes.advance_cpu_cycles(1);
+    nes.cpu.clock_cycle(&mut nes.bus);
     assert!(matches!(nes.cpu.take_interrupt(), Some(Interrupt::NMI)));
-    nes.advance_cpu_cycles(1);
+    nes.cpu.clock_cycle(&mut nes.bus);
     assert!(nes.cpu.take_interrupt().is_none());
 }
 
@@ -515,10 +517,15 @@ fn cpu_cycle_advancement_keeps_ticking_after_frame_completion() {
     nes.bus.ppu.scanline = 261;
     nes.bus.ppu.dot = 339;
 
-    assert!(nes.advance_cpu_cycles(2));
-    assert_eq!(nes.total_cpu_cycles, 2);
+    for _ in 0..2 {
+        nes.cpu.clock_cycle(&mut nes.bus);
+    }
+    assert!(std::mem::take(&mut nes.bus.frame_pending));
+    assert!(!nes.bus.frame_pending);
+    assert_eq!(nes.bus.total_cpu_cycles, 2);
     assert_eq!((nes.bus.ppu.scanline, nes.bus.ppu.dot), (0, 4));
-    assert!(!nes.advance_cpu_cycles(1));
-    assert_eq!(nes.total_cpu_cycles, 3);
+    nes.cpu.clock_cycle(&mut nes.bus);
+    assert!(!std::mem::take(&mut nes.bus.frame_pending));
+    assert_eq!(nes.bus.total_cpu_cycles, 3);
     assert_eq!((nes.bus.ppu.scanline, nes.bus.ppu.dot), (0, 7));
 }

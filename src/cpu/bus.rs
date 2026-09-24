@@ -11,22 +11,28 @@ pub enum WriteEffect {
 
 pub struct CpuBus {
     data_bus: u8,
+    pub(crate) total_cpu_cycles: usize,
+    pub(crate) frame_pending: bool,
     pub(crate) ram: [u8; 2048],
     pub(crate) ppu: Ppu,
     pub(crate) ciram: [u8; 2048],
     pub(crate) controller: Controller,
     pub(crate) cartridge: Cartridge,
+    pub(crate) oam_dma_request: Option<u8>,
 }
 
 impl Default for CpuBus {
     fn default() -> Self {
         Self {
             data_bus: 0,
+            total_cpu_cycles: 0,
+            frame_pending: false,
             ram: [0; 2048],
             ppu: Ppu::default(),
             ciram: [0; 2048],
             controller: Controller::new(),
             cartridge: Cartridge::default(),
+            oam_dma_request: None,
         }
     }
 }

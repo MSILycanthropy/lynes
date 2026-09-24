@@ -137,12 +137,6 @@ impl Ppu {
         self.registers.oam_addr = self.registers.oam_addr.wrapping_add(1);
     }
 
-    pub(crate) fn write_oam_dma(&mut self, buffer: &[u8; 256]) {
-        for &data in buffer {
-            self.write_oam_data(data);
-        }
-    }
-
     pub(crate) fn write_status(&mut self, data: u8) {
         // Writing PPUSTATUS affects the I/O latch, but not the status flags.
         self.io_latch = data;

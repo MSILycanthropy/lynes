@@ -1,103 +1,109 @@
 use super::{AddrMode, Cpu, bus::CpuBus};
 
+#[derive(Copy, Clone)]
+pub(crate) enum AccessKind {
+    Read,
+    Write,
+    ReadModifyWrite,
+}
+
 impl Cpu {
-    pub(crate) fn get_operating_address(
+    fn indexed_address(
         &mut self,
         bus: &mut CpuBus,
-        mode: &AddrMode,
-    ) -> (u16, bool) {
+        base: u16,
+        index: u8,
+        access: AccessKind,
+    ) -> u16 {
+        let address = base.wrapping_add(u16::from(index));
+        let crossed_page = page_crossed(base, address);
+
+        if crossed_page || !matches!(access, AccessKind::Read) {
+            let dummy_address = (base & 0xFF00) | (address & 0x00FF);
+            self.read(bus, dummy_address);
+        }
+
+        address
+    }
+
+    fn fetch_instruction_address(&mut self, bus: &mut CpuBus) -> u16 {
+        let low = self.fetch_instruction_byte(bus);
+        let high = self.fetch_instruction_byte(bus);
+        u16::from_le_bytes([low, high])
+    }
+
+    pub(crate) fn read_operand(&mut self, bus: &mut CpuBus, mode: &AddrMode) -> u8 {
         match mode {
-            AddrMode::Implied => {
-                panic!("Implied addressing mode has no operating address as it is implied")
+            AddrMode::Immediate => self.fetch_instruction_byte(bus),
+            _ => {
+                let address = self.fetch_operand_address(bus, mode, AccessKind::Read);
+                self.read(bus, address)
             }
-            AddrMode::Accumulator => panic!(
-                "Accumulator addressing mode has no operating address as it operates on the accumulator"
-            ),
-            AddrMode::Immediate => {
-                let address = self.registers.program_counter;
-                (address, false)
-            }
-            _ => self.get_absolute_address(bus, self.registers.program_counter, mode),
         }
     }
 
-    pub(crate) fn get_absolute_address(
+    pub(crate) fn fetch_operand_address(
         &mut self,
         bus: &mut CpuBus,
-        address: u16,
         mode: &AddrMode,
-    ) -> (u16, bool) {
+        access: AccessKind,
+    ) -> u16 {
         match mode {
-            AddrMode::ZeroPage => {
-                let address = self.read(bus, address) as u16;
-                (address, false)
-            }
+            AddrMode::ZeroPage => u16::from(self.fetch_instruction_byte(bus)),
             AddrMode::ZeroPageX => {
-                let address = self.read(bus, address).wrapping_add(self.registers.x) as u16;
-                (address, false)
+                let base = self.fetch_instruction_byte(bus);
+                self.read(bus, u16::from(base));
+                u16::from(base.wrapping_add(self.registers.x))
             }
             AddrMode::ZeroPageY => {
-                let address = self.read(bus, address).wrapping_add(self.registers.y) as u16;
-                (address, false)
+                let base = self.fetch_instruction_byte(bus);
+                self.read(bus, u16::from(base));
+                u16::from(base.wrapping_add(self.registers.y))
             }
-            AddrMode::Relative => {
-                let offset = self.read(bus, address) as u16;
-                let old_address = address;
-                let address = old_address.wrapping_add(1).wrapping_add(offset);
-
-                (address, page_crossed(old_address, address))
-            }
-            AddrMode::Absolute => {
-                let address = self.read_u16(bus, address);
-                (address, false)
-            }
+            AddrMode::Absolute => self.fetch_instruction_address(bus),
             AddrMode::AbsoluteX => {
-                let old_address = self.read_u16(bus, address);
-                let address = old_address.wrapping_add(self.registers.x as u16);
-
-                (address, page_crossed(old_address, address))
+                let base = self.fetch_instruction_address(bus);
+                self.indexed_address(bus, base, self.registers.x, access)
             }
             AddrMode::AbsoluteY => {
-                let old_address = self.read_u16(bus, address);
-                let address = old_address.wrapping_add(self.registers.y as u16);
-
-                (address, page_crossed(old_address, address))
+                let base = self.fetch_instruction_address(bus);
+                self.indexed_address(bus, base, self.registers.y, access)
             }
             AddrMode::Indirect => {
-                let old_address = self.read_u16(bus, address);
+                let old_address = self.fetch_instruction_address(bus);
 
-                let address = if old_address & 0x00FF == 0x00FF {
+                if old_address & 0x00FF == 0x00FF {
                     let low = self.read(bus, old_address);
                     let high = self.read(bus, old_address & 0xFF00);
 
                     u16::from_le_bytes([low, high])
                 } else {
                     self.read_u16(bus, old_address)
-                };
-
-                (address, false)
+                }
             }
             AddrMode::IndirectX => {
-                let zero_page_address = self.read(bus, address);
+                let zero_page_address = self.fetch_instruction_byte(bus);
+                self.read(bus, u16::from(zero_page_address));
                 let pointer = zero_page_address.wrapping_add(self.registers.x);
                 let low = self.read(bus, pointer as u16);
                 let high = self.read(bus, pointer.wrapping_add(1) as u16);
 
-                let address = u16::from_le_bytes([low, high]);
-
-                (address, false)
+                u16::from_le_bytes([low, high])
             }
             AddrMode::IndirectY => {
-                let zero_page_address = self.read(bus, address);
+                let zero_page_address = self.fetch_instruction_byte(bus);
                 let low = self.read(bus, zero_page_address as u16);
                 let high = self.read(bus, zero_page_address.wrapping_add(1) as u16);
 
-                let old_address = u16::from_le_bytes([low, high]);
-                let address = old_address.wrapping_add(self.registers.y as u16);
-
-                (address, page_crossed(old_address, address))
+                let base = u16::from_le_bytes([low, high]);
+                self.indexed_address(bus, base, self.registers.y, access)
             }
-            _ => panic!("Invalid absolute addressing mode"),
+            AddrMode::Immediate
+            | AddrMode::Relative
+            | AddrMode::Implied
+            | AddrMode::Accumulator => {
+                panic!("Addressing mode {mode:?} has no memory operand address")
+            }
         }
     }
 }

@@ -16,7 +16,7 @@ Known failures have explicit ignore reasons in `tests/support/blargg_cases.rs`. 
 ```sh
 cargo test --test blargg ppu_vbl -- --include-ignored --nocapture
 cargo test --test blargg instr_test_v5 -- --include-ignored --nocapture
-cargo test --test blargg ppu_vbl_nmi_04_nmi_control -- --ignored --exact --nocapture
+cargo test --test blargg ppu_vbl_nmi_06_suppression -- --ignored --exact --nocapture
 ```
 
 The original names `cpu_basics` (v5's `01-basics`) and `ppu_vbl_basics` are preserved. Both run by default. The `instr_test_v5` filter therefore excludes `cpu_basics`.

@@ -58,7 +58,7 @@ blargg_test!(
     apu_test_apu_test,
     "apu_test/apu_test.nes",
     30000000,
-    "baseline: UnsupportedCartridge(\"mapper 1 (only mapper 0 is supported by this runner)\")"
+    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 1\")"
 );
 blargg_test!(
     apu_test_1_len_ctr,
@@ -242,7 +242,7 @@ blargg_test!(
     cpu_interrupts_v2_cpu_interrupts,
     "cpu_interrupts_v2/cpu_interrupts.nes",
     30000000,
-    "baseline: UnsupportedCartridge(\"mapper 1 (only mapper 0 is supported by this runner)\")"
+    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 1\")"
 );
 blargg_test!(
     cpu_interrupts_v2_1_cli_latency,
@@ -352,7 +352,7 @@ blargg_test!(
     instr_misc_instr_misc,
     "instr_misc/instr_misc.nes",
     30000000,
-    "baseline: UnsupportedCartridge(\"mapper 1 (only mapper 0 is supported by this runner)\")"
+    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 1\")"
 );
 blargg_test!(
     instr_misc_01_abs_x_wrap,
@@ -373,19 +373,19 @@ blargg_test!(
     instr_misc_04_dummy_reads_apu,
     "instr_misc/04-dummy_reads_apu.nes",
     30000000,
-    "baseline: EmulatorPanicked(\"Invalid CPU read address: 0x4018\")"
+    "baseline: Failed(2); Official opcodes failed"
 );
 blargg_test!(
     instr_test_v3_all_instrs,
     "instr_test_v3/all_instrs.nes",
     120000000,
-    "baseline: UnsupportedCartridge(\"mapper 1 (only mapper 0 is supported by this runner)\")"
+    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 1\")"
 );
 blargg_test!(
     instr_test_v3_official_only,
     "instr_test_v3/official_only.nes",
     120000000,
-    "baseline: UnsupportedCartridge(\"mapper 1 (only mapper 0 is supported by this runner)\")"
+    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 1\")"
 );
 blargg_test!(
     instr_test_v3_01_implied,
@@ -400,38 +400,33 @@ blargg_test!(
 blargg_test!(
     instr_test_v3_03_zero_page,
     "instr_test_v3/03-zero_page.nes",
-    120000000,
-    "baseline: Failed(1); C7 DCP z"
+    120000000
 );
 blargg_test!(
     instr_test_v3_04_zp_xy,
     "instr_test_v3/04-zp_xy.nes",
-    120000000,
-    "baseline: Failed(1); D7 DCP z,X"
+    120000000
 );
 blargg_test!(
     instr_test_v3_05_absolute,
     "instr_test_v3/05-absolute.nes",
-    120000000,
-    "baseline: Failed(1); CF DCP abs"
+    120000000
 );
 blargg_test!(
     instr_test_v3_06_abs_xy,
     "instr_test_v3/06-abs_xy.nes",
     120000000,
-    "baseline: Failed(1); 9C SYA abs,X"
+    "baseline: Failed(1); 9C SYA abs,X; 9E SXA abs,Y"
 );
 blargg_test!(
     instr_test_v3_07_ind_x,
     "instr_test_v3/07-ind_x.nes",
-    120000000,
-    "baseline: Failed(1); C3 DCP (z,X)"
+    120000000
 );
 blargg_test!(
     instr_test_v3_08_ind_y,
     "instr_test_v3/08-ind_y.nes",
-    120000000,
-    "baseline: Failed(1); D3 DCP (z),Y"
+    120000000
 );
 blargg_test!(
     instr_test_v3_09_branches,
@@ -453,26 +448,24 @@ blargg_test!(instr_test_v3_13_rti, "instr_test_v3/13-rti.nes", 120000000);
 blargg_test!(
     instr_test_v3_14_brk,
     "instr_test_v3/14-brk.nes",
-    120000000,
-    "baseline: Failed(1); 00 BRK"
+    120000000
 );
 blargg_test!(
     instr_test_v3_15_special,
     "instr_test_v3/15-special.nes",
-    120000000,
-    "baseline: Failed(7); BRK should push status with bits 4 and 5 set"
+    120000000
 );
 blargg_test!(
     instr_test_v5_all_instrs,
     "instr_test_v5/all_instrs.nes",
     120000000,
-    "baseline: UnsupportedCartridge(\"mapper 1 (only mapper 0 is supported by this runner)\")"
+    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 1\")"
 );
 blargg_test!(
     instr_test_v5_official_only,
     "instr_test_v5/official_only.nes",
     120000000,
-    "baseline: UnsupportedCartridge(\"mapper 1 (only mapper 0 is supported by this runner)\")"
+    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 1\")"
 );
 blargg_test!(cpu_basics, "instr_test_v5/01-basics.nes", 120000000);
 blargg_test!(
@@ -504,7 +497,7 @@ blargg_test!(
     instr_test_v5_07_abs_xy,
     "instr_test_v5/07-abs_xy.nes",
     120000000,
-    "baseline: Failed(1); 9C SYA abs,X"
+    "baseline: Failed(1); 9C SYA abs,X; 9E SXA abs,Y"
 );
 blargg_test!(
     instr_test_v5_08_ind_x,
@@ -547,13 +540,13 @@ blargg_test!(
     instr_timing_instr_timing,
     "instr_timing/instr_timing.nes",
     30000000,
-    "baseline: UnsupportedCartridge(\"mapper 1 (only mapper 0 is supported by this runner)\")"
+    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 1\")"
 );
 blargg_test!(
     instr_timing_1_instr_timing,
     "instr_timing/1-instr_timing.nes",
     30000000,
-    "baseline: Failed(5); Instruction timing test"
+    "baseline: Failed(5); Timing of APU length period, INC zp, LDA abs, AND #imm, or BNE (taken) is wrong"
 );
 blargg_test!(
     instr_timing_2_branch_timing,
@@ -595,73 +588,73 @@ blargg_test!(
     mmc3_test_1_clocking,
     "mmc3_test/1-clocking.nes",
     30000000,
-    "baseline: UnsupportedCartridge(\"mapper 4 (only mapper 0 is supported by this runner)\")"
+    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 4\")"
 );
 blargg_test!(
     mmc3_test_2_details,
     "mmc3_test/2-details.nes",
     30000000,
-    "baseline: UnsupportedCartridge(\"mapper 4 (only mapper 0 is supported by this runner)\")"
+    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 4\")"
 );
 blargg_test!(
     mmc3_test_3_a12_clocking,
     "mmc3_test/3-A12_clocking.nes",
     30000000,
-    "baseline: UnsupportedCartridge(\"mapper 4 (only mapper 0 is supported by this runner)\")"
+    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 4\")"
 );
 blargg_test!(
     mmc3_test_4_scanline_timing,
     "mmc3_test/4-scanline_timing.nes",
     30000000,
-    "baseline: UnsupportedCartridge(\"mapper 4 (only mapper 0 is supported by this runner)\")"
+    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 4\")"
 );
 blargg_test!(
     mmc3_test_5_mmc3,
     "mmc3_test/5-MMC3.nes",
     30000000,
-    "baseline: UnsupportedCartridge(\"mapper 4 (only mapper 0 is supported by this runner)\")"
+    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 4\")"
 );
 blargg_test!(
     mmc3_test_6_mmc6,
     "mmc3_test/6-MMC6.nes",
     30000000,
-    "baseline: UnsupportedCartridge(\"mapper 4 (only mapper 0 is supported by this runner)\")"
+    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 4\")"
 );
 blargg_test!(
     mmc3_test_2_1_clocking,
     "mmc3_test_2/1-clocking.nes",
     30000000,
-    "baseline: UnsupportedCartridge(\"mapper 4 (only mapper 0 is supported by this runner)\")"
+    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 4\")"
 );
 blargg_test!(
     mmc3_test_2_2_details,
     "mmc3_test_2/2-details.nes",
     30000000,
-    "baseline: UnsupportedCartridge(\"mapper 4 (only mapper 0 is supported by this runner)\")"
+    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 4\")"
 );
 blargg_test!(
     mmc3_test_2_3_a12_clocking,
     "mmc3_test_2/3-A12_clocking.nes",
     30000000,
-    "baseline: UnsupportedCartridge(\"mapper 4 (only mapper 0 is supported by this runner)\")"
+    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 4\")"
 );
 blargg_test!(
     mmc3_test_2_4_scanline_timing,
     "mmc3_test_2/4-scanline_timing.nes",
     30000000,
-    "baseline: UnsupportedCartridge(\"mapper 4 (only mapper 0 is supported by this runner)\")"
+    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 4\")"
 );
 blargg_test!(
     mmc3_test_2_5_mmc3,
     "mmc3_test_2/5-MMC3.nes",
     30000000,
-    "baseline: UnsupportedCartridge(\"mapper 4 (only mapper 0 is supported by this runner)\")"
+    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 4\")"
 );
 blargg_test!(
     mmc3_test_2_6_mmc3_alt,
     "mmc3_test_2/6-MMC3_alt.nes",
     30000000,
-    "baseline: UnsupportedCartridge(\"mapper 4 (only mapper 0 is supported by this runner)\")"
+    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 4\")"
 );
 blargg_test!(
     nes_instr_test_01_implied,
@@ -676,38 +669,33 @@ blargg_test!(
 blargg_test!(
     nes_instr_test_03_zero_page,
     "nes_instr_test/03-zero_page.nes",
-    120000000,
-    "baseline: Failed(1); C7 DCP z"
+    120000000
 );
 blargg_test!(
     nes_instr_test_04_zp_xy,
     "nes_instr_test/04-zp_xy.nes",
-    120000000,
-    "baseline: Failed(1); D7 DCP z,X"
+    120000000
 );
 blargg_test!(
     nes_instr_test_05_absolute,
     "nes_instr_test/05-absolute.nes",
-    120000000,
-    "baseline: Failed(1); CF DCP abs"
+    120000000
 );
 blargg_test!(
     nes_instr_test_06_abs_xy,
     "nes_instr_test/06-abs_xy.nes",
     120000000,
-    "baseline: Failed(1); 9C SYA abs,X"
+    "baseline: Failed(1); 9C SYA abs,X; 9E SXA abs,Y"
 );
 blargg_test!(
     nes_instr_test_07_ind_x,
     "nes_instr_test/07-ind_x.nes",
-    120000000,
-    "baseline: Failed(1); C3 DCP (z,X)"
+    120000000
 );
 blargg_test!(
     nes_instr_test_08_ind_y,
     "nes_instr_test/08-ind_y.nes",
-    120000000,
-    "baseline: Failed(1); D3 DCP (z),Y"
+    120000000
 );
 blargg_test!(
     nes_instr_test_09_branches,
@@ -722,8 +710,7 @@ blargg_test!(
 blargg_test!(
     nes_instr_test_11_special,
     "nes_instr_test/11-special.nes",
-    120000000,
-    "baseline: Failed(7); BRK should push status with bits 4 and 5 set"
+    120000000
 );
 deferred_test!(
     nmi_sync_demo_ntsc,
@@ -796,26 +783,26 @@ blargg_test!(
     ppu_open_bus_ppu_open_bus,
     "ppu_open_bus/ppu_open_bus.nes",
     30000000,
-    "baseline: Failed(2); Write to any PPU register should set decay value"
+    "baseline: Failed(3); Decay value should become zero by one second"
 );
 blargg_test!(
     ppu_read_buffer_test_ppu_read_buffer,
     "ppu_read_buffer/test_ppu_read_buffer.nes",
     120000000,
-    "baseline: UnsupportedCartridge(\"mapper 3 (only mapper 0 is supported by this runner)\")"
+    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 3\")"
 );
 blargg_test!(
     ppu_vbl_nmi_ppu_vbl_nmi,
     "ppu_vbl_nmi/ppu_vbl_nmi.nes",
     30000000,
-    "baseline: UnsupportedCartridge(\"mapper 1 (only mapper 0 is supported by this runner)\")"
+    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 1\")"
 );
 blargg_test!(ppu_vbl_basics, "ppu_vbl_nmi/01-vbl_basics.nes", 30000000);
 blargg_test!(
     ppu_vbl_nmi_02_vbl_set_time,
     "ppu_vbl_nmi/02-vbl_set_time.nes",
     30000000,
-    "baseline: Failed(1); T+ 1 2"
+    "baseline: Failed(1); 04 - V; expected 04 - - (VBL flag suppression)"
 );
 blargg_test!(
     ppu_vbl_nmi_03_vbl_clear_time,
@@ -825,32 +812,31 @@ blargg_test!(
 blargg_test!(
     ppu_vbl_nmi_04_nmi_control,
     "ppu_vbl_nmi/04-nmi_control.nes",
-    30000000,
-    "baseline: Failed(11); Immediate occurence should be after NEXT instruction"
+    30000000
 );
 blargg_test!(
     ppu_vbl_nmi_05_nmi_timing,
     "ppu_vbl_nmi/05-nmi_timing.nes",
     30000000,
-    "baseline: Failed(1); 00 2"
+    "baseline: Failed(1); 03 4; expected 03 3; 09 3; expected 09 2"
 );
 blargg_test!(
     ppu_vbl_nmi_06_suppression,
     "ppu_vbl_nmi/06-suppression.nes",
     30000000,
-    "baseline: Failed(1); 00 - N"
+    "baseline: Failed(1); 04 - N; expected 04 - -; 05/06 V N; expected V -"
 );
 blargg_test!(
     ppu_vbl_nmi_07_nmi_on_timing,
     "ppu_vbl_nmi/07-nmi_on_timing.nes",
     30000000,
-    "baseline: Failed(1); 00 N"
+    "baseline: Failed(1); 05 N; expected 05 -"
 );
 blargg_test!(
     ppu_vbl_nmi_08_nmi_off_timing,
     "ppu_vbl_nmi/08-nmi_off_timing.nes",
     30000000,
-    "baseline: Failed(1); 03 -"
+    "baseline: Failed(1); 05/06 N; expected -"
 );
 blargg_test!(
     ppu_vbl_nmi_09_even_odd_frames,
@@ -861,7 +847,7 @@ blargg_test!(
     ppu_vbl_nmi_10_even_odd_timing,
     "ppu_vbl_nmi/10-even_odd_timing.nes",
     30000000,
-    "baseline: Failed(3); 08 07"
+    "baseline: Failed(3); Clock is skipped too late, relative to enabling BG; 08 07"
 );
 deferred_test!(
     read_joy3_count_errors,

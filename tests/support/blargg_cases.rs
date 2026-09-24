@@ -395,8 +395,7 @@ blargg_test!(
 blargg_test!(
     instr_test_v3_02_immediate,
     "instr_test_v3/02-immediate.nes",
-    120000000,
-    "baseline: Failed(1); 4B ASR #n"
+    120000000
 );
 blargg_test!(
     instr_test_v3_03_zero_page,
@@ -484,8 +483,7 @@ blargg_test!(
 blargg_test!(
     instr_test_v5_03_immediate,
     "instr_test_v5/03-immediate.nes",
-    120000000,
-    "baseline: Failed(1); 4B ASR #n"
+    120000000
 );
 blargg_test!(
     instr_test_v5_04_zero_page,
@@ -673,8 +671,7 @@ blargg_test!(
 blargg_test!(
     nes_instr_test_02_immediate,
     "nes_instr_test/02-immediate.nes",
-    120000000,
-    "baseline: Failed(1); 4B ASR #n"
+    120000000
 );
 blargg_test!(
     nes_instr_test_03_zero_page,

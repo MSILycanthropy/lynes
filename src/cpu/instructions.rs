@@ -833,16 +833,12 @@ fn arr(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
 }
 
 fn asr(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
-    let addr = cpu.registers.program_counter;
     let value = cpu.read_operand(bus, mode);
+    let result = cpu.registers.accumulator & value;
 
-    let result = value >> 1;
+    cpu.registers.status.set_carry(result & 1 != 0);
 
-    cpu.write(bus, addr, result);
-
-    cpu.registers.status.set_carry(value & 1 == 1);
-
-    set_accumulator(cpu, result & cpu.registers.accumulator);
+    set_accumulator(cpu, result >> 1);
 }
 
 fn axa(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
@@ -858,9 +854,7 @@ fn axs(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
     let x_and_a = cpu.registers.x & cpu.registers.accumulator;
     let result = x_and_a.wrapping_sub(value);
 
-    if value <= x_and_a {
-        cpu.registers.status.set_carry(true);
-    }
+    cpu.registers.status.set_carry(x_and_a >= value);
     update_zero_and_negative_flags(cpu, result);
 
     cpu.registers.x = result;
@@ -910,10 +904,9 @@ fn lax(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
 
 fn lxa(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
     let value = cpu.read_operand(bus, mode);
-    let result = cpu.registers.accumulator & value;
 
-    cpu.registers.x = result;
-    set_accumulator(cpu, result);
+    cpu.registers.x = value;
+    set_accumulator(cpu, value);
 }
 
 fn rla(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {

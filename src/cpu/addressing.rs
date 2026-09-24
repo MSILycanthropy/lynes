@@ -34,9 +34,13 @@ impl Cpu {
 
     pub(crate) fn read_operand(&mut self, bus: &mut CpuBus, mode: &AddrMode) -> u8 {
         match mode {
-            AddrMode::Immediate => self.fetch_instruction_byte(bus),
+            AddrMode::Immediate => {
+                self.poll_interrupts();
+                self.fetch_instruction_byte(bus)
+            }
             _ => {
                 let address = self.fetch_operand_address(bus, mode, AccessKind::Read);
+                self.poll_interrupts();
                 self.read(bus, address)
             }
         }
@@ -69,18 +73,6 @@ impl Cpu {
                 let base = self.fetch_instruction_address(bus);
                 self.indexed_address(bus, base, self.registers.y, access)
             }
-            AddrMode::Indirect => {
-                let old_address = self.fetch_instruction_address(bus);
-
-                if old_address & 0x00FF == 0x00FF {
-                    let low = self.read(bus, old_address);
-                    let high = self.read(bus, old_address & 0xFF00);
-
-                    u16::from_le_bytes([low, high])
-                } else {
-                    self.read_u16(bus, old_address)
-                }
-            }
             AddrMode::IndirectX => {
                 let zero_page_address = self.fetch_instruction_byte(bus);
                 self.read(bus, u16::from(zero_page_address));
@@ -99,6 +91,7 @@ impl Cpu {
                 self.indexed_address(bus, base, self.registers.y, access)
             }
             AddrMode::Immediate
+            | AddrMode::Indirect
             | AddrMode::Relative
             | AddrMode::Implied
             | AddrMode::Accumulator => {

@@ -221,26 +221,22 @@ deferred_test!(
 blargg_test!(
     cpu_dummy_writes_cpu_dummy_writes_oam,
     "cpu_dummy_writes/cpu_dummy_writes_oam.nes",
-    30000000,
-    "baseline: EmulatorPanicked(\"Cannot write to PRG ROM!\"); \"\\u{1b}[0;37mTEST: cpu_dummy_writes_oam\\n\\u{1b}[0;33mThis program verifies that the\\nCPU does 2x writes properly.\\nAny read-modify-write opcode\\nshould first write the origi-\\nnal value; then the calculated\\nvalue exactly 1 cycle later.\\n\\nRequirement: OAM memory reads\\nMUST be reliable. This is\\noften the case on emulators,\\nbut NOT on the real NES.\\nNevertheless, this test can be\\nused to see if the CPU in the\\nemulator is built properly.\\n\\n\\u{1b}[0;37m\\u{1b}[0;37mTesting OAM.  The screen will go blank for a moment now.\\n\\u{1b}[0;37mOK; \""
+    30000000
 );
 blargg_test!(
     cpu_dummy_writes_cpu_dummy_writes_ppumem,
     "cpu_dummy_writes/cpu_dummy_writes_ppumem.nes",
-    30000000,
-    "baseline: EmulatorPanicked(\"internal error: entered unreachable code: attempted to access mirrored address space 21907\"); \"\\u{1b}[0;37mTEST: cpu_dummy_writes_ppumem\\n\\u{1b}[0;33mThis program verifies that the\\nCPU does 2x writes properly.\\nAny read-modify-write opcode\\nshould first write the origi-\\nnal value; then the calculated\\nvalue exactly 1 cycle later.\\n\\n\\u{1b}[0;37m\""
+    30000000
 );
 blargg_test!(
     cpu_exec_space_test_cpu_exec_space_apu,
     "cpu_exec_space/test_cpu_exec_space_apu.nes",
-    30000000,
-    "baseline: EmulatorPanicked(\"Invalid CPU read address: 0x4018\"); \"\\u{1b}[0;37mTEST: test_cpu_exec_space_apu\\n\\u{1b}[0;33mThis program verifies that the\\nCPU can execute code from any\\npossible location that it can\\naddress, including I/O space.\\n\\nIn this test, it is also\\nverified that not only all\\nwrite-only APU I/O ports\\nreturn the open bus, but\\nalso the unallocated I/O\\nspace in $4018..$40FF.\\n\\n\\u{1b}[0;37m\\u{1b}[1;34m0022 \\u{8}\\u{8}\\u{8}\\u{8}\\u{8}4000 \""
+    30000000
 );
 blargg_test!(
     cpu_exec_space_test_cpu_exec_space_ppuio,
     "cpu_exec_space/test_cpu_exec_space_ppuio.nes",
-    30000000,
-    "baseline: Failed(3); \"\\u{1b}[0;37mTEST:test_cpu_exec_space_ppuio\\n\\u{1b}[0;33mThis program verifies that the\\nCPU can execute code from any\\npossible location that it can\\naddress, including I/O space.\\n\\nIn addition, it will be tested\\nthat an RTS instruction does a\\ndummy read of the byte that\\nimmediately follows the\\ninstructions.\\n\\n\\u{1b}[0;37m\\u{1b}[1;34m\\u{1b}[0;37m\\nPPU open bus  implementation  is missing  or incomplete:  A write to $2003, followed by a read from $2001 should return the same value as was written.\\n\\nFailed #3\\n\""
+    30000000
 );
 blargg_test!(
     cpu_interrupts_v2_cpu_interrupts,
@@ -286,8 +282,7 @@ blargg_test!(
 blargg_test!(
     cpu_reset_registers,
     "cpu_reset/registers.nes",
-    30000000,
-    "baseline: Failed(3); A  X  Y  P  S"
+    30000000
 );
 deferred_test!(
     cpu_timing_test6_cpu_timing_test,
@@ -373,8 +368,7 @@ blargg_test!(
 blargg_test!(
     instr_misc_03_dummy_reads,
     "instr_misc/03-dummy_reads.nes",
-    30000000,
-    "baseline: Failed(3); LDA abs,x"
+    30000000
 );
 blargg_test!(
     instr_misc_04_dummy_reads_apu,
@@ -497,20 +491,17 @@ blargg_test!(
 blargg_test!(
     instr_test_v5_04_zero_page,
     "instr_test_v5/04-zero_page.nes",
-    120000000,
-    "baseline: Failed(1); C7 DCP z"
+    120000000
 );
 blargg_test!(
     instr_test_v5_05_zp_xy,
     "instr_test_v5/05-zp_xy.nes",
-    120000000,
-    "baseline: Failed(1); D7 DCP z,X"
+    120000000
 );
 blargg_test!(
     instr_test_v5_06_absolute,
     "instr_test_v5/06-absolute.nes",
-    120000000,
-    "baseline: Failed(1); CF DCP abs"
+    120000000
 );
 blargg_test!(
     instr_test_v5_07_abs_xy,
@@ -521,14 +512,12 @@ blargg_test!(
 blargg_test!(
     instr_test_v5_08_ind_x,
     "instr_test_v5/08-ind_x.nes",
-    120000000,
-    "baseline: Failed(1); C3 DCP (z,X)"
+    120000000
 );
 blargg_test!(
     instr_test_v5_09_ind_y,
     "instr_test_v5/09-ind_y.nes",
-    120000000,
-    "baseline: Failed(1); D3 DCP (z),Y"
+    120000000
 );
 blargg_test!(
     instr_test_v5_10_branches,
@@ -550,14 +539,12 @@ blargg_test!(instr_test_v5_14_rti, "instr_test_v5/14-rti.nes", 120000000);
 blargg_test!(
     instr_test_v5_15_brk,
     "instr_test_v5/15-brk.nes",
-    120000000,
-    "baseline: Failed(1); 00 BRK"
+    120000000
 );
 blargg_test!(
     instr_test_v5_16_special,
     "instr_test_v5/16-special.nes",
-    120000000,
-    "baseline: Failed(5); BRK should push status with bits 4 and 5 set"
+    120000000
 );
 blargg_test!(
     instr_timing_instr_timing,

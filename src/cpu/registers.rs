@@ -15,7 +15,7 @@ impl Default for CpuRegisters {
             accumulator: 0,
             x: 0,
             y: 0,
-            stack_pointer: 0xFD,
+            stack_pointer: 0,
             status: Status::new().with_b(0b10).with_interrupt_disable(true),
             program_counter: 0,
         }

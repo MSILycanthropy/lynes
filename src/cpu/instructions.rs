@@ -308,6 +308,7 @@ fn and(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
 
 fn asl(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
     let old_value = if let AddrMode::Accumulator = mode {
+        cpu.poll_interrupts();
         cpu.read(bus, cpu.registers.program_counter);
         let old_value = cpu.registers.accumulator;
 
@@ -320,6 +321,7 @@ fn asl(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
         let result = old_value << 1;
 
         cpu.write(bus, addr, old_value);
+        cpu.poll_interrupts();
         cpu.write(bus, addr, result);
         update_zero_and_negative_flags(cpu, result);
 
@@ -362,9 +364,17 @@ fn bpl(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
     branch(cpu, bus, !cpu.registers.status.negative());
 }
 
-fn brk(_cpu: &mut Cpu, _bus: &mut CpuBus, _mode: &AddrMode) {
-    // TODO: interrupts
-    // std::process::exit(0);
+fn brk(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.fetch_instruction_byte(bus);
+
+    cpu.stack_push_u16(bus, cpu.registers.program_counter);
+
+    let mut status = cpu.registers.status.clone();
+    status.set_b(0b11);
+    cpu.stack_push(bus, status.bits());
+
+    cpu.registers.status.set_interrupt_disable(true);
+    cpu.registers.program_counter = cpu.read_u16(bus, 0xFFFE);
 }
 
 fn bvc(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
@@ -376,21 +386,25 @@ fn bvs(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
 }
 
 fn clc(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.poll_interrupts();
     cpu.read(bus, cpu.registers.program_counter);
     cpu.registers.status.set_carry(false);
 }
 
 fn cld(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.poll_interrupts();
     cpu.read(bus, cpu.registers.program_counter);
     cpu.registers.status.set_decimal(false);
 }
 
 fn cli(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.poll_interrupts();
     cpu.read(bus, cpu.registers.program_counter);
     cpu.registers.status.set_interrupt_disable(false);
 }
 
 fn clv(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.poll_interrupts();
     cpu.read(bus, cpu.registers.program_counter);
     cpu.registers.status.set_overflow(false);
 }
@@ -419,12 +433,14 @@ fn dec(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
     let result = old_value.wrapping_sub(1);
 
     cpu.write(bus, addr, old_value);
+    cpu.poll_interrupts();
     cpu.write(bus, addr, result);
 
     update_zero_and_negative_flags(cpu, result);
 }
 
 fn dex(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.poll_interrupts();
     cpu.read(bus, cpu.registers.program_counter);
     let result = cpu.registers.x.wrapping_sub(1);
 
@@ -433,6 +449,7 @@ fn dex(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
 }
 
 fn dey(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.poll_interrupts();
     cpu.read(bus, cpu.registers.program_counter);
     let result = cpu.registers.y.wrapping_sub(1);
 
@@ -454,6 +471,7 @@ fn inc(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
 }
 
 fn inx(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.poll_interrupts();
     cpu.read(bus, cpu.registers.program_counter);
     let result = cpu.registers.x.wrapping_add(1);
 
@@ -462,6 +480,7 @@ fn inx(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
 }
 
 fn iny(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.poll_interrupts();
     cpu.read(bus, cpu.registers.program_counter);
     let result = cpu.registers.y.wrapping_add(1);
 
@@ -470,9 +489,32 @@ fn iny(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
 }
 
 fn jmp(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
-    let addr = cpu.fetch_operand_address(bus, mode, AccessKind::Read);
+    let (low, high) = match mode {
+        AddrMode::Absolute => {
+            let low = cpu.fetch_instruction_byte(bus);
+            cpu.poll_interrupts();
+            let high = cpu.fetch_instruction_byte(bus);
 
-    cpu.registers.program_counter = addr;
+            (low, high)
+        }
+        AddrMode::Indirect => {
+            let pointer_low = cpu.fetch_instruction_byte(bus);
+            let pointer_high = cpu.fetch_instruction_byte(bus);
+            let pointer = u16::from_le_bytes([pointer_low, pointer_high]);
+
+            // The 6502 wraps within the pointer's page for the high byte.
+            let high_address = (pointer & 0xFF00) | (pointer.wrapping_add(1) & 0x00FF);
+
+            let low = cpu.read(bus, pointer);
+            cpu.poll_interrupts();
+            let high = cpu.read(bus, high_address);
+
+            (low, high)
+        }
+        _ => panic!("Invalid JMP addressing mode: {mode:?}"),
+    };
+
+    cpu.registers.program_counter = u16::from_le_bytes([low, high]);
 }
 
 fn jsr(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
@@ -482,6 +524,7 @@ fn jsr(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
     dummy_stack_read(cpu, bus);
 
     cpu.stack_push_u16(bus, return_address);
+    cpu.poll_interrupts();
 
     let high = cpu.fetch_instruction_byte(bus);
     cpu.registers.program_counter = u16::from_le_bytes([low, high]);
@@ -506,6 +549,7 @@ fn ldy(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
 fn lsr(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
     let old_value = match mode {
         AddrMode::Accumulator => {
+            cpu.poll_interrupts();
             cpu.read(bus, cpu.registers.program_counter);
             let old_value = cpu.registers.accumulator;
 
@@ -519,6 +563,7 @@ fn lsr(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
             let result = old_value >> 1;
 
             cpu.write(bus, addr, old_value);
+            cpu.poll_interrupts();
             cpu.write(bus, addr, result);
             update_zero_and_negative_flags(cpu, result);
 
@@ -530,6 +575,7 @@ fn lsr(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
 }
 
 fn nop(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.poll_interrupts();
     cpu.read(bus, cpu.registers.program_counter);
 }
 
@@ -542,6 +588,7 @@ fn ora(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
 
 fn pha(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
     cpu.read(bus, cpu.registers.program_counter);
+    cpu.poll_interrupts();
     cpu.stack_push(bus, cpu.registers.accumulator);
 }
 
@@ -550,12 +597,14 @@ fn php(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
     status.set_b(0b11);
 
     cpu.read(bus, cpu.registers.program_counter);
+    cpu.poll_interrupts();
     cpu.stack_push(bus, status.bits());
 }
 
 fn pla(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
     cpu.read(bus, cpu.registers.program_counter);
     dummy_stack_read(cpu, bus);
+    cpu.poll_interrupts();
 
     let result = cpu.stack_pop(bus);
 
@@ -565,6 +614,7 @@ fn pla(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
 fn plp(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
     cpu.read(bus, cpu.registers.program_counter);
     dummy_stack_read(cpu, bus);
+    cpu.poll_interrupts();
 
     let result = cpu.stack_pop(bus);
 
@@ -575,6 +625,7 @@ fn plp(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
 fn rol(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
     let old_value = match mode {
         AddrMode::Accumulator => {
+            cpu.poll_interrupts();
             cpu.read(bus, cpu.registers.program_counter);
             let old_value = cpu.registers.accumulator;
             let result = (old_value << 1) | (cpu.registers.status.carry() as u8);
@@ -589,6 +640,7 @@ fn rol(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
             let result = (old_value << 1) | (cpu.registers.status.carry() as u8);
 
             cpu.write(bus, addr, old_value);
+            cpu.poll_interrupts();
             cpu.write(bus, addr, result);
 
             update_zero_and_negative_flags(cpu, result);
@@ -603,6 +655,7 @@ fn rol(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
 fn ror(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
     let old_value = match mode {
         AddrMode::Accumulator => {
+            cpu.poll_interrupts();
             cpu.read(bus, cpu.registers.program_counter);
             let old_value = cpu.registers.accumulator;
             let result = (old_value >> 1) | ((cpu.registers.status.carry() as u8) << 7);
@@ -617,6 +670,7 @@ fn ror(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
             let result = (old_value >> 1) | ((cpu.registers.status.carry() as u8) << 7);
 
             cpu.write(bus, addr, old_value);
+            cpu.poll_interrupts();
             cpu.write(bus, addr, result);
             update_zero_and_negative_flags(cpu, result);
 
@@ -632,12 +686,14 @@ fn rti(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
     dummy_stack_read(cpu, bus);
 
     let status = cpu.stack_pop(bus);
-    let program_counter = cpu.stack_pop_u16(bus);
-
     cpu.registers.status.set_bits(status);
     cpu.registers.status.set_b(0b10);
 
-    cpu.registers.program_counter = program_counter;
+    let low = cpu.stack_pop(bus);
+    cpu.poll_interrupts();
+    let high = cpu.stack_pop(bus);
+
+    cpu.registers.program_counter = u16::from_le_bytes([low, high]);
 }
 
 fn rts(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
@@ -646,6 +702,7 @@ fn rts(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
 
     let address = cpu.stack_pop_u16(bus);
 
+    cpu.poll_interrupts();
     cpu.read(bus, address);
 
     cpu.registers.program_counter = address.wrapping_add(1);
@@ -659,16 +716,19 @@ fn sbc(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
 }
 
 fn sec(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.poll_interrupts();
     cpu.read(bus, cpu.registers.program_counter);
     cpu.registers.status.set_carry(true);
 }
 
 fn sed(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.poll_interrupts();
     cpu.read(bus, cpu.registers.program_counter);
     cpu.registers.status.set_decimal(true);
 }
 
 fn sei(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.poll_interrupts();
     cpu.read(bus, cpu.registers.program_counter);
     cpu.registers.status.set_interrupt_disable(true);
 }
@@ -677,6 +737,7 @@ fn sta(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
     let addr = cpu.fetch_operand_address(bus, mode, AccessKind::Write);
     let value = cpu.registers.accumulator;
 
+    cpu.poll_interrupts();
     cpu.write(bus, addr, value);
 }
 
@@ -684,6 +745,7 @@ fn stx(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
     let addr = cpu.fetch_operand_address(bus, mode, AccessKind::Write);
     let value = cpu.registers.x;
 
+    cpu.poll_interrupts();
     cpu.write(bus, addr, value);
 }
 
@@ -691,10 +753,12 @@ fn sty(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
     let addr = cpu.fetch_operand_address(bus, mode, AccessKind::Write);
     let value = cpu.registers.y;
 
+    cpu.poll_interrupts();
     cpu.write(bus, addr, value);
 }
 
 fn tax(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.poll_interrupts();
     cpu.read(bus, cpu.registers.program_counter);
     cpu.registers.x = cpu.registers.accumulator;
 
@@ -702,6 +766,7 @@ fn tax(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
 }
 
 fn tay(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.poll_interrupts();
     cpu.read(bus, cpu.registers.program_counter);
     cpu.registers.y = cpu.registers.accumulator;
 
@@ -709,6 +774,7 @@ fn tay(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
 }
 
 fn tsx(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.poll_interrupts();
     cpu.read(bus, cpu.registers.program_counter);
     cpu.registers.x = cpu.registers.stack_pointer;
 
@@ -716,16 +782,19 @@ fn tsx(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
 }
 
 fn txa(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.poll_interrupts();
     cpu.read(bus, cpu.registers.program_counter);
     set_accumulator(cpu, cpu.registers.x);
 }
 
 fn txs(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.poll_interrupts();
     cpu.read(bus, cpu.registers.program_counter);
     cpu.registers.stack_pointer = cpu.registers.x;
 }
 
 fn tya(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
+    cpu.poll_interrupts();
     cpu.read(bus, cpu.registers.program_counter);
     set_accumulator(cpu, cpu.registers.y);
 }
@@ -782,6 +851,7 @@ fn axa(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
     let addr = cpu.fetch_operand_address(bus, mode, AccessKind::Write);
     let value = cpu.registers.x & cpu.registers.accumulator & (addr >> 8) as u8;
 
+    cpu.poll_interrupts();
     cpu.write(bus, addr, value);
 }
 
@@ -804,6 +874,7 @@ fn dcp(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
     let result = value.wrapping_sub(1);
 
     cpu.write(bus, addr, value);
+    cpu.poll_interrupts();
     cpu.write(bus, addr, result);
 
     compare(cpu, cpu.registers.accumulator, result);
@@ -853,6 +924,7 @@ fn rla(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
     let result = (value << 1) | (cpu.registers.status.carry() as u8);
 
     cpu.write(bus, addr, value);
+    cpu.poll_interrupts();
     cpu.write(bus, addr, result);
 
     cpu.registers.status.set_carry(value >> 7 == 1);
@@ -866,6 +938,7 @@ fn rra(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
     let result = (value >> 1) | (cpu.registers.status.carry() as u8) << 7;
 
     cpu.write(bus, addr, value);
+    cpu.poll_interrupts();
     cpu.write(bus, addr, result);
 
     cpu.registers.status.set_carry(value & 1 == 1);
@@ -878,6 +951,7 @@ fn sax(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
 
     let result = cpu.registers.accumulator & cpu.registers.x;
 
+    cpu.poll_interrupts();
     cpu.write(bus, addr, result);
 }
 
@@ -887,6 +961,7 @@ fn slo(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
     let result = value << 1;
 
     cpu.write(bus, addr, value);
+    cpu.poll_interrupts();
     cpu.write(bus, addr, result);
 
     cpu.registers.status.set_carry(value >> 7 == 1);
@@ -900,6 +975,7 @@ fn sre(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
     let result = value >> 1;
 
     cpu.write(bus, addr, value);
+    cpu.poll_interrupts();
     cpu.write(bus, addr, result);
 
     cpu.registers.status.set_carry(value & 1 == 1);
@@ -911,6 +987,7 @@ fn sxa(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
     let addr = cpu.fetch_operand_address(bus, mode, AccessKind::Write);
     let value = cpu.registers.x & ((addr >> 8) as u8 + 1);
 
+    cpu.poll_interrupts();
     cpu.write(bus, addr, value);
 }
 
@@ -918,6 +995,7 @@ fn sya(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
     let addr = cpu.fetch_operand_address(bus, mode, AccessKind::Write);
     let value = cpu.registers.y & ((addr >> 8) as u8 + 1);
 
+    cpu.poll_interrupts();
     cpu.write(bus, addr, value);
 }
 
@@ -940,6 +1018,7 @@ fn xas(cpu: &mut Cpu, bus: &mut CpuBus, mode: &AddrMode) {
     let addr = cpu.fetch_operand_address(bus, mode, AccessKind::Write);
     let value = result & ((addr >> 8) as u8 + 1);
 
+    cpu.poll_interrupts();
     cpu.write(bus, addr, value);
 }
 
@@ -963,6 +1042,7 @@ fn increment_memory(cpu: &mut Cpu, bus: &mut CpuBus, addr: u16) -> u8 {
     let result = old_value.wrapping_add(1);
 
     cpu.write(bus, addr, old_value);
+    cpu.poll_interrupts();
     cpu.write(bus, addr, result);
     update_zero_and_negative_flags(cpu, result);
 
@@ -981,6 +1061,7 @@ fn update_zero_and_negative_flags(cpu: &mut Cpu, value: u8) {
 }
 
 fn branch(cpu: &mut Cpu, bus: &mut CpuBus, condition: bool) {
+    cpu.poll_interrupts();
     let offset = cpu.fetch_instruction_byte(bus) as i8;
     let next_address = cpu.registers.program_counter;
 
@@ -995,6 +1076,7 @@ fn branch(cpu: &mut Cpu, bus: &mut CpuBus, condition: bool) {
     if next_address & 0xFF00 != target & 0xFF00 {
         let dummy_address = (next_address & 0xFF00) | (target & 0x00FF);
 
+        cpu.poll_interrupts();
         cpu.read(bus, dummy_address);
     }
 
@@ -1016,9 +1098,95 @@ fn dummy_stack_read(cpu: &mut Cpu, bus: &mut CpuBus) {
 
 #[cfg(test)]
 mod test {
-    use crate::NES;
+    use crate::{NES, StepKind};
 
     use super::*;
+
+    #[test]
+    fn brk_saves_pc_plus_two_and_old_status_and_rti_skips_padding() {
+        for status in [0xEB, 0xEF] {
+            let mut nes = NES::default();
+            nes.bus.cartridge.prg_rom = vec![0; 0x4000];
+            nes.bus.cartridge.prg_rom[0x3FFA..0x3FFC].copy_from_slice(&[0x00, 0x07]);
+            nes.bus.cartridge.prg_rom[0x3FFE..0x4000].copy_from_slice(&[0x00, 0x06]);
+            nes.bus.write(0x0200, 0x00); // BRK
+            nes.bus.write(0x0201, 0x02); // Padding is discarded, not executed.
+            nes.bus.write(0x0600, 0x40); // RTI
+            nes.cpu.registers.program_counter = 0x0200;
+            nes.cpu.registers.stack_pointer = 0xFD;
+            nes.cpu.registers.status.set_bits(status);
+
+            let entry = nes.step();
+
+            assert!(matches!(
+                entry.kind,
+                StepKind::Instructrion {
+                    pc: 0x0200,
+                    opcode: 0x00
+                }
+            ));
+            assert_eq!(entry.cpu_cycles, 7);
+            assert_eq!(nes.bus.ppu.dot, 21);
+            assert_eq!(nes.cpu.registers.program_counter, 0x0600);
+            assert_eq!(nes.cpu.registers.stack_pointer, 0xFA);
+            assert_eq!(nes.bus.peek(0x01FD), 0x02);
+            assert_eq!(nes.bus.peek(0x01FC), 0x02);
+            assert_eq!(nes.bus.peek(0x01FB), status | 0x10); // B set; original I.
+            assert_eq!(nes.cpu.registers.status.bits(), status | 0x04);
+
+            let resumed = nes.step();
+
+            assert_eq!(resumed.cpu_cycles, 6);
+            assert_eq!(nes.cpu.registers.program_counter, 0x0202);
+            assert_eq!(nes.cpu.registers.stack_pointer, 0xFD);
+            assert_eq!(nes.cpu.registers.status.bits(), status);
+        }
+    }
+
+    #[test]
+    fn brk_padding_fetch_wraps_pc() {
+        let mut nes = NES::default();
+        nes.bus.cartridge.prg_rom = vec![0; 0x4000];
+        // $FFFF is both the BRK opcode and the IRQ vector's high byte.
+        nes.bus.cartridge.prg_rom[0x3FFE] = 0x80;
+        nes.bus.write(0x0000, 0xEA);
+        nes.cpu.registers.program_counter = 0xFFFF;
+        nes.cpu.registers.stack_pointer = 0xFD;
+
+        let entry = nes.step();
+
+        assert_eq!(entry.cpu_cycles, 7);
+        assert_eq!(nes.cpu.registers.program_counter, 0x0080);
+        assert_eq!(nes.bus.peek(0x01FD), 0x00);
+        assert_eq!(nes.bus.peek(0x01FC), 0x01);
+    }
+
+    #[test]
+    fn brk_padding_fetch_applies_bus_side_effects_once() {
+        let mut nes = NES::default();
+        nes.bus.cartridge.prg_rom = vec![0; 0x4000];
+        nes.bus.cartridge.prg_rom[0x3FFE..0x4000].copy_from_slice(&[0x00, 0x06]);
+        nes.bus.controller.button_state.set_a(true);
+        nes.bus.controller.button_state.set_select(true);
+        nes.bus.write(0x0000, 0); // APU status stub at $4015 will read $00 (BRK).
+        nes.cpu.registers.program_counter = 0x4015;
+        nes.cpu.registers.stack_pointer = 0xFD;
+
+        let entry = nes.step();
+
+        assert!(matches!(
+            entry.kind,
+            StepKind::Instructrion {
+                pc: 0x4015,
+                opcode: 0x00
+            }
+        ));
+        assert_eq!(entry.cpu_cycles, 7);
+        assert_eq!(nes.cpu.registers.program_counter, 0x0600);
+        assert_eq!(nes.bus.peek(0x01FD), 0x40);
+        assert_eq!(nes.bus.peek(0x01FC), 0x17);
+        assert_eq!(nes.bus.controller.peek(), 0); // One read consumed A; B is next.
+    }
 
     #[test]
     fn lsr_accumulator_uses_two_cycles_without_writing_memory() {

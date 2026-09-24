@@ -15,6 +15,17 @@ fn cartridge(mirroring: ScreenMirroring) -> Cartridge {
     }
 }
 
+// These PPU tests drive polling explicitly; entering NMI acknowledges its latch
+// and advances the CPU/PPU through the normal seven-cycle entry sequence.
+fn poll_and_service_interrupt(nes: &mut NES) -> Option<Interrupt> {
+    nes.cpu.poll_interrupts();
+    let interrupt = nes.cpu.take_interrupt();
+    if let Some(ref interrupt) = interrupt {
+        nes.cpu.enter_interrupt(&mut nes.bus, interrupt);
+    }
+    interrupt
+}
+
 // These helpers exercise PPU register behavior without advancing CPU/PPU time.
 fn set_vram_address(nes: &mut NES, address: u16) {
     nes.bus.read(0x2002); // Start with the first PPUADDR write.
@@ -358,6 +369,7 @@ fn assert_frame_length(nes: &mut NES, dots: usize) {
 fn vblank_starts_at_scanline_241_dot_1() {
     for nmi_enabled in [false, true] {
         let mut nes = NES::default();
+        nes.bus.cartridge.prg_rom = vec![0; 0x4000];
         nes.bus.ppu.scanline = 240;
         nes.bus.ppu.dot = 340;
         nes.bus.write(0x2000, if nmi_enabled { 0x80 } else { 0 });
@@ -367,7 +379,7 @@ fn vblank_starts_at_scanline_241_dot_1() {
         assert_eq!((nes.bus.ppu.scanline, nes.bus.ppu.dot), (241, 0));
         assert!(!nes.bus.ppu.registers.status.vblank_started());
         assert!(!nes.bus.ppu.nmi_asserted());
-        assert!(nes.cpu.take_interrupt().is_none());
+        assert!(poll_and_service_interrupt(&mut nes).is_none());
 
         assert!(!nes.bus.ppu.tick());
         nes.sample_interrupt_line();
@@ -376,17 +388,18 @@ fn vblank_starts_at_scanline_241_dot_1() {
         assert!(!nes.bus.ppu.registers.status.sprite_zero_hit());
 
         // Once acknowledged, the same vblank must not request NMI every dot.
-        let interrupt = nes.cpu.take_interrupt();
+        let interrupt = poll_and_service_interrupt(&mut nes);
         assert_eq!(matches!(interrupt, Some(Interrupt::NMI)), nmi_enabled);
         assert!(!nes.bus.ppu.tick());
         nes.sample_interrupt_line();
-        assert!(nes.cpu.take_interrupt().is_none());
+        assert!(poll_and_service_interrupt(&mut nes).is_none());
     }
 }
 
 #[test]
 fn pre_render_dot_1_clears_flags_but_preserves_pending_interrupts() {
     let mut nes = NES::default();
+    nes.bus.cartridge.prg_rom = vec![0; 0x4000];
     nes.bus.ppu.scanline = 260;
     nes.bus.ppu.dot = 340;
     nes.bus.ppu.registers.status.set_vblank_started(true);
@@ -417,34 +430,45 @@ fn pre_render_dot_1_clears_flags_but_preserves_pending_interrupts() {
         nes.sample_interrupt_line();
     }
     assert_eq!((nes.bus.ppu.scanline, nes.bus.ppu.dot), (0, 0));
-    assert!(matches!(nes.cpu.take_interrupt(), Some(Interrupt::NMI)));
-    assert!(nes.cpu.take_interrupt().is_none());
+    assert!(matches!(
+        poll_and_service_interrupt(&mut nes),
+        Some(Interrupt::NMI)
+    ));
+    assert!(poll_and_service_interrupt(&mut nes).is_none());
 }
 
 #[test]
 fn enabling_nmi_during_vblank_requests_only_on_enable_edges() {
     let mut nes = NES::default();
+    nes.bus.cartridge.prg_rom = vec![0; 0x4000];
     nes.bus.ppu.scanline = 241;
     nes.bus.ppu.tick();
     nes.sample_interrupt_line();
     assert!(!nes.bus.ppu.nmi_asserted());
-    assert!(nes.cpu.take_interrupt().is_none());
+    assert!(poll_and_service_interrupt(&mut nes).is_none());
 
     nes.cpu_write(0x2000, 0x80);
     assert!(nes.bus.ppu.nmi_asserted());
-    assert!(matches!(nes.cpu.take_interrupt(), Some(Interrupt::NMI)));
+    assert!(matches!(
+        poll_and_service_interrupt(&mut nes),
+        Some(Interrupt::NMI)
+    ));
     nes.cpu_write(0x2000, 0x80);
-    assert!(nes.cpu.take_interrupt().is_none());
+    assert!(poll_and_service_interrupt(&mut nes).is_none());
 
     nes.cpu_write(0x2000, 0);
     assert!(!nes.bus.ppu.nmi_asserted());
     nes.cpu_write(0x2000, 0x80);
-    assert!(matches!(nes.cpu.take_interrupt(), Some(Interrupt::NMI)));
+    assert!(matches!(
+        poll_and_service_interrupt(&mut nes),
+        Some(Interrupt::NMI)
+    ));
 }
 
 #[test]
 fn status_read_preserves_latched_nmi_and_allows_next_vblank_edge() {
     let mut nes = NES::default();
+    nes.bus.cartridge.prg_rom = vec![0; 0x4000];
     nes.cpu_write(0x2000, 0x80);
     nes.bus.ppu.scanline = 241;
     nes.bus.ppu.dot = 0;
@@ -454,17 +478,23 @@ fn status_read_preserves_latched_nmi_and_allows_next_vblank_edge() {
     assert!(nes.bus.ppu.nmi_asserted());
     assert_eq!(nes.cpu_read(0x2002) & 0x80, 0x80);
     assert!(!nes.bus.ppu.nmi_asserted());
-    assert!(matches!(nes.cpu.take_interrupt(), Some(Interrupt::NMI)));
-    assert!(nes.cpu.take_interrupt().is_none());
+    assert!(matches!(
+        poll_and_service_interrupt(&mut nes),
+        Some(Interrupt::NMI)
+    ));
+    assert!(poll_and_service_interrupt(&mut nes).is_none());
 
     // Position at the next vblank edge without another sample in between:
     // the status read itself must have delivered the deasserted line.
     nes.bus.ppu.scanline = 241;
     nes.bus.ppu.dot = 0;
     nes.cpu.clock_cycle(&mut nes.bus);
-    assert!(matches!(nes.cpu.take_interrupt(), Some(Interrupt::NMI)));
+    assert!(matches!(
+        poll_and_service_interrupt(&mut nes),
+        Some(Interrupt::NMI)
+    ));
     nes.cpu.clock_cycle(&mut nes.bus);
-    assert!(nes.cpu.take_interrupt().is_none());
+    assert!(poll_and_service_interrupt(&mut nes).is_none());
 }
 
 #[test]

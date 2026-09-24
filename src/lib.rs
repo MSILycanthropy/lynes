@@ -92,18 +92,7 @@ impl NES {
     }
 
     pub fn reset(&mut self) {
-        self.bus.oam_dma_request = None;
-        self.cpu.registers.accumulator = 0;
-        self.cpu.registers.x = 0;
-        self.cpu.registers.y = 0;
-        self.cpu.registers.stack_pointer = 0xFD;
-
-        self.cpu.registers.status.set_bits(0b0010_0100);
-        self.cpu.registers.program_counter = self.cpu_read_u16(0xFFFC);
-
-        self.bus.total_cpu_cycles = 7;
-        self.bus.frame_pending = false;
-        self.bus.ppu.dot = 21;
+        self.cpu.reset(&mut self.bus)
     }
 
     pub fn insert_cart(&mut self, mut cart: Cartridge) {

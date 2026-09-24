@@ -1,3 +1,5 @@
+use crate::Interrupt;
+
 use super::{AddrMode, Cpu, addressing::AccessKind, bus::CpuBus};
 
 macro_rules! instr {
@@ -367,14 +369,10 @@ fn bpl(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
 fn brk(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {
     cpu.fetch_instruction_byte(bus);
 
-    cpu.stack_push_u16(bus, cpu.registers.program_counter);
-
     let mut status = cpu.registers.status.clone();
     status.set_b(0b11);
-    cpu.stack_push(bus, status.bits());
 
-    cpu.registers.status.set_interrupt_disable(true);
-    cpu.registers.program_counter = cpu.read_u16(bus, 0xFFFE);
+    cpu.finish_interrupt_entry(bus, &Interrupt::IRQ, status.bits());
 }
 
 fn bvc(cpu: &mut Cpu, bus: &mut CpuBus, _mode: &AddrMode) {

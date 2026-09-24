@@ -206,24 +206,40 @@ impl Cpu {
     }
 
     pub(crate) fn enter_interrupt(&mut self, bus: &mut CpuBus, interrupt: &Interrupt) {
-        if matches!(interrupt, Interrupt::NMI) {
-            self.interrupt_state.nmi_pending = false;
-        }
-
         let pc = self.registers.program_counter;
 
         self.read(bus, pc);
         self.read(bus, pc);
 
-        self.stack_push_u16(bus, pc);
-
         let mut status = self.registers.status.clone();
         status.set_b(0b10);
 
-        self.stack_push(bus, status.bits());
+        self.finish_interrupt_entry(bus, interrupt, status.bits());
+    }
+
+    pub(crate) fn finish_interrupt_entry(
+        &mut self,
+        bus: &mut CpuBus,
+        requested: &Interrupt,
+        status: u8,
+    ) {
+        self.stack_push_u16(bus, self.registers.program_counter);
+
+        let vector = self.select_interrupt_vector(requested);
+
+        self.stack_push(bus, status);
 
         self.registers.status.set_interrupt_disable(true);
-        self.registers.program_counter = self.read_u16(bus, interrupt.address());
+        self.registers.program_counter = self.read_u16(bus, vector);
+    }
+
+    fn select_interrupt_vector(&mut self, requested: &Interrupt) -> u16 {
+        if matches!(requested, Interrupt::NMI) || self.interrupt_state.nmi_pending {
+            self.interrupt_state.nmi_pending = false;
+            Interrupt::NMI.address()
+        } else {
+            requested.address()
+        }
     }
 
     pub(crate) fn poll_interrupts(&mut self) {

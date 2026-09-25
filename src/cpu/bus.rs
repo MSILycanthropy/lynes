@@ -173,8 +173,12 @@ mod tests {
         assert_eq!(bus.peek(0x2002), 0x92);
         assert_eq!(bus.peek(0x3FFA), 0x92);
         bus.write(0x2005, 0x34);
-        assert_eq!(bus.ppu.registers.scroll.scroll_x(), 0x12);
-        assert_eq!(bus.ppu.registers.scroll.scroll_y(), 0x34);
+        let scroll = &mut bus.ppu.registers.scroll;
+        scroll.copy_render_x();
+        scroll.copy_render_y();
+        // Coarse X=2, coarse Y=6, fine Y=4; fine X is stored separately.
+        assert_eq!(scroll.render_address(), 0x40C2);
+        assert_eq!(scroll.fine_x(), 2);
         assert_eq!(bus.read(0x2002), 0x94);
         assert_eq!(bus.peek(0x2002), 0x14);
 

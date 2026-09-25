@@ -4,6 +4,7 @@ pub const FRAME_STRIDE: usize = FRAME_WIDTH * 3;
 
 pub type FrameData = [u8; FRAME_HEIGHT * FRAME_STRIDE];
 
+#[derive(Copy, Clone)]
 pub struct Frame {
     data: FrameData,
 }

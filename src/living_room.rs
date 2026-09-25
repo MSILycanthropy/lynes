@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use crate::{NES, input::ButtonState, tv::TV};
+use crate::{NES, frame::Frame, input::ButtonState, tv::TV};
 
 pub mod ratatui;
 
@@ -21,6 +21,7 @@ pub struct LivingRoom<T: TV> {
 
     next_present_time: Option<Instant>,
     frame_pending: bool,
+    frame: Frame,
 }
 
 impl<T: TV> LivingRoom<T> {
@@ -34,6 +35,8 @@ impl<T: TV> LivingRoom<T> {
 
             next_present_time: None,
             frame_pending: false,
+
+            frame: Frame::default(),
         }
     }
 
@@ -60,9 +63,12 @@ impl<T: TV> LivingRoom<T> {
 
         while elapsed < budget {
             let result = self.nes.step();
-
             elapsed += result.cpu_cycles;
-            frame_ready |= result.frame_ready;
+
+            if result.frame_ready {
+                self.frame = *self.nes.frame();
+                frame_ready = true
+            }
         }
 
         self.cycles_ahead = elapsed - budget;
@@ -87,7 +93,7 @@ impl<T: TV> LivingRoom<T> {
 
     pub fn present(&mut self) -> Result<(), T::Error> {
         if let Some(tv) = self.tv.as_mut() {
-            tv.present(self.nes.frame())?;
+            tv.present(&self.frame)?;
         }
 
         Ok(())

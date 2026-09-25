@@ -15,6 +15,9 @@ pub struct Ppu {
     io_latch: u8,
     supress_vblank: bool,
 
+    scanline_address: u16,
+    scanline_fine_x: u8,
+
     pub(crate) registers: PpuRegisters,
     pub(crate) palette_table: [u8; 32],
     pub(crate) oam_data: [u8; 256],
@@ -30,6 +33,9 @@ impl Default for Ppu {
         Self {
             io_latch: 0,
             supress_vblank: false,
+
+            scanline_address: 0,
+            scanline_fine_x: 0,
 
             registers: PpuRegisters::default(),
             palette_table: [0; 32],
@@ -49,7 +55,7 @@ impl Ppu {
             self.registers.mask.show_background() || self.registers.mask.show_sprite();
 
         // TODO: Regions so that we dont hardcode NTSC
-        let frame_ready = match (self.scanline, self.dot) {
+        let frame_wrapped = match (self.scanline, self.dot) {
             (261, 339) if self.odd_frame && rendering_enabled => {
                 self.scanline = 0;
                 self.dot = 0;
@@ -73,7 +79,7 @@ impl Ppu {
             }
         };
 
-        if frame_ready {
+        if frame_wrapped {
             self.odd_frame = !self.odd_frame;
         }
 
@@ -93,9 +99,41 @@ impl Ppu {
             _ => {}
         }
 
+        let render_scanline = self.scanline < 240 || self.scanline == 261;
+
+        if rendering_enabled && render_scanline {
+            let tile_boundary = (8..=256).contains(&self.dot) && self.dot % 8 == 0;
+            let prefetch_boundary = matches!(self.dot, 328 | 336);
+
+            if tile_boundary || prefetch_boundary {
+                self.registers.scroll.increment_render_x();
+            }
+
+            if self.dot == 256 {
+                self.registers.scroll.increment_render_y();
+            }
+
+            if self.dot == 257 {
+                self.registers.scroll.copy_render_x();
+            }
+
+            if self.scanline == 261 && (280..=304).contains(&self.dot) {
+                self.registers.scroll.copy_render_y();
+            }
+
+            if self.dot == 321 {
+                self.scanline_address = self.registers.scroll.render_address();
+            }
+        }
+
+        if self.scanline < 240 && self.dot == 1 {
+            self.scanline_fine_x = self.registers.scroll.fine_x();
+            self.render_scanline(bus, self.scanline);
+        }
+
         self.check_sprite_zero_hit(bus);
 
-        return frame_ready;
+        self.scanline == 240 && self.dot == 0
     }
 
     pub(crate) fn write_address(&mut self, data: u8) {
@@ -249,69 +287,47 @@ impl Ppu {
             return;
         }
 
-        if self.sprite_zero_opaque_at(bus, x, y) && self.background_opaque_at(bus, x, y) {
+        if self.sprite_zero_opaque_at(bus, x, y) && self.background_pixel(bus, x) != 0 {
             self.registers.status.set_sprite_zero_hit(true);
         }
     }
 
-    fn background_palette(&self, attribute_table: &[u8], tile_x: usize, tile_y: usize) -> [u8; 4] {
-        let attribute_table_index = tile_y / 4 * 8 + tile_x / 4;
-        let attibute_table_value = attribute_table[attribute_table_index];
+    fn background_pixel(&self, bus: &PpuBus<'_>, x: usize) -> u8 {
+        let v = self.scanline_address;
 
-        let palette_table_index = match (tile_x % 4 / 2, tile_y % 4 / 2) {
-            (0, 0) => (attibute_table_value >> 0) & 0b11,
-            (1, 0) => (attibute_table_value >> 2) & 0b11,
-            (0, 1) => (attibute_table_value >> 4) & 0b11,
-            (1, 1) => (attibute_table_value >> 6) & 0b11,
-            _ => unreachable!(),
-        } as usize;
-        let palette_start = palette_table_index * 4 + 1;
+        let scrolled_x = usize::from(v & 0x001F) * 8 + usize::from(self.scanline_fine_x) + x;
 
-        [
-            self.palette_table[0],
-            self.palette_table[palette_start],
-            self.palette_table[palette_start + 1],
-            self.palette_table[palette_start + 2],
-        ]
-    }
+        let mut nametable = 0x2000 | (v & 0x0C00);
 
-    fn background_opaque_at(&self, bus: &PpuBus<'_>, x: usize, y: usize) -> bool {
-        let scroll = &self.registers.scroll;
-        let mut nametable = scroll.name_table_address();
-
-        let scrolled_x = x + usize::from(scroll.scroll_x());
         if scrolled_x >= 256 {
             nametable ^= 0x0400;
         }
+
         let tile_x = (scrolled_x / 8) & 31;
-
-        let scroll_y = usize::from(scroll.scroll_y());
-        let pixel_y = (scroll_y & 7) + y;
-        let mut tile_y = scroll_y / 8;
-
-        for _ in 0..pixel_y / 8 {
-            match tile_y {
-                29 => {
-                    tile_y = 0;
-                    nametable ^= 0x0800;
-                }
-                31 => tile_y = 0,
-                _ => tile_y += 1,
-            }
-        }
+        let tile_y = usize::from((v >> 5) & 31);
+        let fine_y = (v >> 12) & 7;
 
         let tile_address = nametable + (tile_y * 32 + tile_x) as u16;
         let tile = u16::from(bus.read(tile_address));
 
-        let address = self.registers.control.background_pattern_address_value()
-            + tile * 16
-            + (pixel_y & 7) as u16;
+        let pattern_address =
+            self.registers.control.background_pattern_address_value() + tile * 16 + fine_y;
 
-        let low = bus.read(address);
-        let high = bus.read(address + 8);
+        let low = bus.read(pattern_address);
+        let high = bus.read(pattern_address + 8);
         let bit = 7 - (scrolled_x & 7);
+        let value = ((low >> bit) & 1) | (((high >> bit) & 1) << 1);
 
-        ((low | high) & (1u8 << bit)) != 0
+        if value == 0 {
+            return 0;
+        }
+
+        let attribute_address = nametable + 0x03C0 + ((tile_y / 4) * 8 + tile_x / 4) as u16;
+        let attribute = bus.read(attribute_address);
+        let shift = (tile_y & 2) * 2 + (tile_x & 2);
+        let palette = (attribute >> shift) & 3;
+
+        palette * 4 + value
     }
 
     fn sprite_palette(&self, index: usize) -> [u8; 4] {

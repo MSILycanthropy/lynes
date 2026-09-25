@@ -68,10 +68,6 @@ impl NES {
         let cpu_cycles = self.bus.total_cpu_cycles - before;
         let frame_ready = std::mem::take(&mut self.bus.frame_pending);
 
-        if frame_ready {
-            self.render();
-        }
-
         StepResult {
             kind,
             cpu_cycles,

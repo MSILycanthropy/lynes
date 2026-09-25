@@ -67,8 +67,12 @@ fn status_writes_latch_data_without_changing_flags_or_scroll_toggle() {
     assert_eq!(nes.bus.peek(0x2000), 0x1B); // Status peek doesn't latch its result.
 
     nes.bus.write(0x2005, 0x34);
-    assert_eq!(nes.bus.ppu.registers.scroll.scroll_x(), 0x12);
-    assert_eq!(nes.bus.ppu.registers.scroll.scroll_y(), 0x34);
+    let scroll = &mut nes.bus.ppu.registers.scroll;
+    scroll.copy_render_x();
+    scroll.copy_render_y();
+    // Coarse X=2, coarse Y=6, fine Y=4; fine X is stored separately.
+    assert_eq!(scroll.render_address(), 0x40C2);
+    assert_eq!(scroll.fine_x(), 2);
     assert_eq!(nes.bus.read(0x2002), 0xD4);
     assert_eq!(nes.bus.peek(0x2000), 0xD4); // Latches status before clearing vblank.
     assert_eq!(nes.bus.peek(0x2002), 0x54);
@@ -146,27 +150,47 @@ fn cartridge_chr_reads_stay_buffered_and_rom_writes_are_ignored() {
 }
 
 #[test]
-fn renderer_reads_background_and_sprite_patterns_from_cartridge() {
+fn scanline_renderer_only_updates_its_row_and_preserves_sprite_flips() {
+    use crate::frame::{FRAME_HEIGHT, FRAME_STRIDE, FRAME_WIDTH};
+
     let mut cart = cartridge(ScreenMirroring::Horizontal);
-    // Background tile 0 in bank 0 uses color 1; sprite tile 1 in bank 1 uses color 2.
-    cart.chr_rom[0..8].fill(0xFF);
-    cart.chr_rom[0x1018..0x1020].fill(0xFF);
+    cart.chr_rom[0..8].fill(0xFF); // Background color 1.
+    cart.chr_rom[0x101E] = 0x80; // Sprite tile 1, row 6, leftmost pixel: color 2.
     let mut nes = NES::default();
     nes.insert_cart(cart);
-    nes.bus.write(0x2000, 0x08);
+    nes.bus.ppu.write_control(0x08);
+    nes.bus.ppu.write_mask(0x1E);
     nes.bus.ppu.palette_table[1] = 1;
     nes.bus.ppu.palette_table[0x12] = 2;
-    nes.bus.ppu.oam_data[..4].copy_from_slice(&[16, 1, 0, 16]);
+    nes.bus.ppu.oam_data[..4].copy_from_slice(&[16, 1, 0xC0, 16]);
 
-    nes.render();
+    for y in 0..FRAME_HEIGHT {
+        for x in 0..FRAME_WIDTH {
+            nes.bus.ppu.frame.set_pixel(x, y, (3, 5, 7));
+        }
+    }
 
-    for (x, y, palette_index) in [(32, 32, 1), (16, 16, 2)] {
-        let offset = y * crate::frame::FRAME_STRIDE + x * 3;
-        let color = super::palette::SYSTEM_PALLETE[palette_index];
-        assert_eq!(
-            &nes.frame().data()[offset..offset + 3],
-            &[color.0, color.1, color.2]
-        );
+    let bus = super::bus::PpuBus {
+        cartridge: &mut nes.bus.cartridge,
+        ciram: &mut nes.bus.ciram,
+    };
+    nes.bus.ppu.render_scanline(&bus, 17);
+
+    for y in 0..FRAME_HEIGHT {
+        for x in 0..FRAME_WIDTH {
+            let expected = if y == 17 {
+                // Both flips move source row 6 / column 0 to row 1 / column 7.
+                super::palette::SYSTEM_PALLETE[if x == 23 { 2 } else { 1 }]
+            } else {
+                (3, 5, 7)
+            };
+            let offset = y * FRAME_STRIDE + x * 3;
+            assert_eq!(
+                &nes.frame().data()[offset..offset + 3],
+                &[expected.0, expected.1, expected.2],
+                "pixel ({x}, {y})"
+            );
+        }
     }
 }
 
@@ -511,6 +535,7 @@ fn rendering_disabled_keeps_both_frame_parities_full_length() {
 fn either_rendering_layer_shortens_only_odd_frames() {
     for mask in [0x08, 0x10, 0x18] {
         let mut nes = NES::default();
+        nes.insert_cart(cartridge(ScreenMirroring::Horizontal));
         nes.bus.ppu.write_mask(mask);
         for dots in [89_342, 89_341, 89_342, 89_341] {
             assert_frame_length(&mut nes, dots);

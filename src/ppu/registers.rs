@@ -90,6 +90,14 @@ impl ScrollState {
         self.write_toggle = !self.write_toggle;
     }
 
+    pub fn render_address(&self) -> u16 {
+        self.current_address
+    }
+
+    pub fn fine_x(&self) -> u8 {
+        self.fine_x
+    }
+
     pub fn memory_address(&self) -> u16 {
         self.current_address & 0x3FFF
     }
@@ -102,23 +110,47 @@ impl ScrollState {
         self.write_toggle = false;
     }
 
-    pub fn scroll_x(&self) -> u8 {
-        let coarse_x = self.temporary_address & 0x1F;
-
-        (coarse_x as u8) * 8 + self.fine_x
+    pub fn increment_render_x(&mut self) {
+        if self.current_address & 0x001F == 31 {
+            self.current_address &= !0x001F;
+            self.current_address ^= 0x0400;
+        } else {
+            self.current_address += 1;
+        }
     }
 
-    pub fn scroll_y(&self) -> u8 {
-        let coarse_y = (self.temporary_address >> 5) & 0x1F;
-        let fine_y = (self.temporary_address >> 12) & 0x07;
+    pub fn increment_render_y(&mut self) {
+        if self.current_address & 0x7000 != 0x7000 {
+            self.current_address += 0x1000;
+            return;
+        }
 
-        (coarse_y as u8) * 8 + fine_y as u8
+        self.current_address &= !0x7000;
+
+        let mut coarse_y = (self.current_address >> 5) & 0x001F;
+
+        match coarse_y {
+            29 => {
+                coarse_y = 0;
+                self.current_address ^= 0x0800;
+            }
+            31 => coarse_y = 0,
+            _ => coarse_y += 1,
+        }
+
+        self.current_address = (self.current_address & !0x3E0) | (coarse_y << 5);
     }
 
-    pub fn name_table_address(&self) -> u16 {
-        const NAMETABLE_MASK: u16 = 0x03 << 10;
+    pub fn copy_render_x(&mut self) {
+        const MASK: u16 = 0x041F;
 
-        0x2000 | (self.temporary_address & NAMETABLE_MASK)
+        self.current_address = (self.current_address & !MASK) | (self.temporary_address & MASK);
+    }
+
+    pub fn copy_render_y(&mut self) {
+        const MASK: u16 = 0x7BE0;
+
+        self.current_address = (self.current_address & !MASK) | (self.temporary_address & MASK);
     }
 }
 

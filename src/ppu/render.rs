@@ -1,199 +1,102 @@
-use crate::{NES, cartridge::ScreenMirroring};
+use crate::frame::{FRAME_HEIGHT, FRAME_WIDTH};
 
-use super::palette;
+use super::{Ppu, bus::PpuBus, palette};
 
-impl NES {
-    pub(crate) fn render(&mut self) {
-        self.render_background();
-        self.render_sprites();
-    }
+#[derive(Clone, Copy)]
+struct SpritePixel {
+    color: u8,
+    behind_background: bool,
+}
 
-    fn render_background(&mut self) {
-        let ciram = self.bus.ciram;
-        let mirroring = self.bus.cartridge.mirroring();
+impl Ppu {
+    fn sprite_scanline(
+        &self,
+        bus: &PpuBus<'_>,
+        scanline: usize,
+    ) -> [Option<SpritePixel>; FRAME_WIDTH] {
+        let mut pixels = [None; FRAME_WIDTH];
 
-        let scroll_x = self.bus.ppu.registers.scroll.scroll_x() as usize;
-        let scroll_y = self.bus.ppu.registers.scroll.scroll_y() as usize;
-
-        use ScreenMirroring::*;
-        let (first_nametable, second_nametable) = match (
-            mirroring,
-            self.bus.ppu.registers.scroll.name_table_address(),
-        ) {
-            (Vertical, 0x2000)
-            | (Vertical, 0x2800)
-            | (Horizontal, 0x2000)
-            | (Horizontal, 0x2400) => (&ciram[0..0x400], &ciram[0x400..0x800]),
-            (Vertical, 0x2400)
-            | (Vertical, 0x2C00)
-            | (Horizontal, 0x2800)
-            | (Horizontal, 0x2C00) => (&ciram[0x400..0x800], &ciram[0..0x400]),
-            (SingleScreenLower, _) => (&ciram[0..0x400], &ciram[0..0x400]),
-            (SingleScreenUpper, _) => (&ciram[0x400..0x800], &ciram[0x400..0x800]),
-            (_, _) => {
-                panic!("Not supported mirroring type {mirroring:?}",);
-            }
-        };
-
-        self.render_name_table(
-            first_nametable,
-            ViewPortRect::new(scroll_x, scroll_y, 256, 240),
-            -(scroll_x as isize),
-            -(scroll_y as isize),
-        );
-
-        if scroll_x > 0 {
-            self.render_name_table(
-                second_nametable,
-                ViewPortRect::new(0, 0, scroll_x, 240),
-                (256 - scroll_x) as isize,
-                0,
-            );
-        } else if scroll_y > 0 {
-            self.render_name_table(
-                second_nametable,
-                ViewPortRect::new(0, 0, 256, scroll_y),
-                0,
-                240 - (scroll_y as isize),
-            );
+        if !self.registers.mask.show_sprite() {
+            return pixels;
         }
-    }
 
-    fn render_name_table(
-        &mut self,
-        name_table: &[u8],
-        view_port: ViewPortRect,
-        shift_x: isize,
-        shift_y: isize,
-    ) {
-        let bank = self
-            .bus
-            .ppu
-            .registers
-            .control
-            .background_pattern_address_value();
-        let attribute_table = &name_table[0x3C0..0x400];
+        for i in (0..self.oam_data.len()).step_by(4) {
+            let tile = self.oam_data[i + 1] as u16;
+            let tile_x = self.oam_data[i + 3] as usize;
+            let tile_y = self.oam_data[i] as usize;
 
-        for i in 0..0x3C0 {
-            let tile_x = i % 32;
-            let tile_y = i / 32;
-            let tile = name_table[i] as u16;
-            let tile_address = bank + tile * 16;
-            let palette = self
-                .bus
-                .ppu
-                .background_palette(attribute_table, tile_x, tile_y);
-
-            for y in 0..=7 {
-                let mut high = self.bus.cartridge.ppu_read(tile_address + y as u16);
-                let mut low = self.bus.cartridge.ppu_read(tile_address + y as u16 + 8);
-
-                for x in (0..=7).rev() {
-                    let value = (1 & low) << 1 | 1 & high;
-
-                    high = high >> 1;
-                    low = low >> 1;
-
-                    let color = palette::SYSTEM_PALLETE[palette[value as usize] as usize];
-
-                    let pixel_x = tile_x * 8 + x;
-                    let pixel_y = tile_y * 8 + y;
-
-                    if view_port.point_is_bounded(pixel_x, pixel_y) {
-                        self.bus.ppu.frame.set_pixel(
-                            (shift_x + pixel_x as isize) as usize,
-                            (shift_y + pixel_y as isize) as usize,
-                            color,
-                        );
-                    }
-                }
+            if scanline < tile_y || scanline >= tile_y + 8 {
+                continue;
             }
-        }
-    }
 
-    fn render_sprites(&mut self) {
-        for i in (0..self.bus.ppu.oam_data.len()).step_by(4).rev() {
-            let tile = self.bus.ppu.oam_data[i + 1] as u16;
-            let tile_x = self.bus.ppu.oam_data[i + 3] as usize;
-            let tile_y = self.bus.ppu.oam_data[i] as usize;
+            let flip_vertical = self.oam_data[i + 2] >> 7 & 1 == 1;
+            let flip_horizontal = self.oam_data[i + 2] >> 6 & 1 == 1;
 
-            let flip_vertical = self.bus.ppu.oam_data[i + 2] >> 7 & 1 == 1;
-            let flip_horizontal = self.bus.ppu.oam_data[i + 2] >> 6 & 1 == 1;
+            let palette = self.sprite_palette(i);
 
-            let palette = self.bus.ppu.sprite_palette(i);
-
-            let bank = self
-                .bus
-                .ppu
-                .registers
-                .control
-                .sprite_pattern_address_value();
+            let bank = self.registers.control.sprite_pattern_address_value();
 
             let tile_address = bank + tile * 16;
 
-            for y in 0..=7 {
-                let mut high = self.bus.cartridge.ppu_read(tile_address + y as u16);
-                let mut low = self.bus.cartridge.ppu_read(tile_address + y as u16 + 8);
+            let row = scanline - tile_y;
+            let row = if flip_vertical { 7 - row } else { row };
+            let mut high = bus.read(tile_address + row as u16);
+            let mut low = bus.read(tile_address + row as u16 + 8);
 
-                'inner: for x in (0..=7).rev() {
-                    let value = (1 & low) << 1 | 1 & high;
+            'inner: for x in (0..=7).rev() {
+                let value = (1 & low) << 1 | 1 & high;
 
-                    high = high >> 1;
-                    low = low >> 1;
+                high = high >> 1;
+                low = low >> 1;
 
-                    if value == 0 {
-                        continue 'inner;
-                    }
+                if value == 0 {
+                    continue 'inner;
+                }
 
-                    let color = palette::SYSTEM_PALLETE[palette[value as usize] as usize];
+                let screen_x = tile_x + if flip_horizontal { 7 - x } else { x };
 
-                    match (flip_horizontal, flip_vertical) {
-                        (false, false) => {
-                            self.bus.ppu.frame.set_pixel(tile_x + x, tile_y + y, color)
-                        }
-                        (true, false) => {
-                            self.bus
-                                .ppu
-                                .frame
-                                .set_pixel(tile_x + 7 - x, tile_y + y, color)
-                        }
-                        (false, true) => {
-                            self.bus
-                                .ppu
-                                .frame
-                                .set_pixel(tile_x + x, tile_y + 7 - y, color)
-                        }
-                        (true, true) => {
-                            self.bus
-                                .ppu
-                                .frame
-                                .set_pixel(tile_x + 7 - x, tile_y + 7 - y, color)
-                        }
-                    }
+                if screen_x < 8 && !self.registers.mask.leftmost_8px_sprite() {
+                    continue;
+                }
+
+                if screen_x >= FRAME_WIDTH {
+                    continue;
+                }
+
+                if pixels[screen_x].is_none() {
+                    pixels[screen_x] = Some(SpritePixel {
+                        color: palette[usize::from(value)],
+                        behind_background: self.oam_data[i + 2] & 0x20 != 0,
+                    })
                 }
             }
         }
+
+        pixels
     }
-}
 
-struct ViewPortRect {
-    x1: usize,
-    y1: usize,
-    x2: usize,
-    y2: usize,
-}
+    pub(crate) fn render_scanline(&mut self, bus: &PpuBus<'_>, scanline: usize) {
+        assert!(scanline < FRAME_HEIGHT);
 
-impl ViewPortRect {
-    fn new(x1: usize, y1: usize, x2: usize, y2: usize) -> Self {
-        Self {
-            x1: x1,
-            y1: y1,
-            x2: x2,
-            y2: y2,
+        let sprites = self.sprite_scanline(bus, scanline);
+
+        for (x, sprite) in sprites.into_iter().enumerate() {
+            let background_visible = self.registers.mask.show_background()
+                && (x >= 8 || self.registers.mask.leftmost_8px_background());
+
+            let background = if background_visible {
+                self.background_pixel(bus, x)
+            } else {
+                0
+            };
+
+            let color = match sprite {
+                Some(sprite) if background == 0 || !sprite.behind_background => sprite.color,
+                _ => self.palette_table[background as usize],
+            };
+
+            self.frame
+                .set_pixel(x, scanline, palette::SYSTEM_PALLETE[color as usize]);
         }
-    }
-
-    fn point_is_bounded(&self, x: usize, y: usize) -> bool {
-        x >= self.x1 && x < self.x2 && y >= self.y1 && y < self.y2
     }
 }

@@ -13,6 +13,8 @@ mod tests;
 
 pub struct Ppu {
     io_latch: u8,
+    supress_vblank: bool,
+
     pub(crate) registers: PpuRegisters,
     pub(crate) palette_table: [u8; 32],
     pub(crate) oam_data: [u8; 256],
@@ -27,6 +29,8 @@ impl Default for Ppu {
     fn default() -> Self {
         Self {
             io_latch: 0,
+            supress_vblank: false,
+
             registers: PpuRegisters::default(),
             palette_table: [0; 32],
             oam_data: [0; 256],
@@ -75,7 +79,11 @@ impl Ppu {
 
         match (self.scanline, self.dot) {
             (241, 1) => {
-                self.registers.status.set_vblank_started(true);
+                if !self.supress_vblank {
+                    self.registers.status.set_vblank_started(true);
+                }
+
+                self.supress_vblank = false
             }
             (261, 1) => {
                 self.registers.status.set_vblank_started(false);
@@ -184,6 +192,10 @@ impl Ppu {
     }
 
     pub(crate) fn read_status(&mut self) -> u8 {
+        if self.scanline == 241 && self.dot == 0 {
+            self.supress_vblank = true;
+        }
+
         let data = self.peek_status();
 
         self.io_latch = data;

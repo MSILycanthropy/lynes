@@ -787,15 +787,14 @@ blargg_test!(
 blargg_test!(
     ppu_vbl_nmi_ppu_vbl_nmi,
     "ppu_vbl_nmi/ppu_vbl_nmi.nes",
-    30000000,
-    "baseline: Failed(1); 02-vbl_set_time: 04 - V; expected 04 - - (VBL flag suppression)"
+    120000000,
+    "baseline: Failed(1); test 10 of 10: Clock is skipped too late, relative to enabling BG; 08 07"
 );
 blargg_test!(ppu_vbl_basics, "ppu_vbl_nmi/01-vbl_basics.nes", 30000000);
 blargg_test!(
     ppu_vbl_nmi_02_vbl_set_time,
     "ppu_vbl_nmi/02-vbl_set_time.nes",
-    30000000,
-    "baseline: Failed(1); 04 - V; expected 04 - - (VBL flag suppression)"
+    30000000
 );
 blargg_test!(
     ppu_vbl_nmi_03_vbl_clear_time,
@@ -810,26 +809,22 @@ blargg_test!(
 blargg_test!(
     ppu_vbl_nmi_05_nmi_timing,
     "ppu_vbl_nmi/05-nmi_timing.nes",
-    30000000,
-    "baseline: Failed(1); 03 4; expected 03 3; 09 3; expected 09 2"
+    30000000
 );
 blargg_test!(
     ppu_vbl_nmi_06_suppression,
     "ppu_vbl_nmi/06-suppression.nes",
-    30000000,
-    "baseline: Failed(1); 04 - N; expected 04 - -; 05/06 V N; expected V -"
+    30000000
 );
 blargg_test!(
     ppu_vbl_nmi_07_nmi_on_timing,
     "ppu_vbl_nmi/07-nmi_on_timing.nes",
-    30000000,
-    "baseline: Failed(1); 05 N; expected 05 -"
+    30000000
 );
 blargg_test!(
     ppu_vbl_nmi_08_nmi_off_timing,
     "ppu_vbl_nmi/08-nmi_off_timing.nes",
-    30000000,
-    "baseline: Failed(1); 05/06 N; expected -"
+    30000000
 );
 blargg_test!(
     ppu_vbl_nmi_09_even_odd_frames,

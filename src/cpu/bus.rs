@@ -147,6 +147,15 @@ impl CpuBus {
         WriteEffect::None
     }
 
+    pub(crate) fn tick_ppu(&mut self) -> bool {
+        let bus = PpuBus {
+            cartridge: &mut self.cartridge,
+            ciram: &mut self.ciram,
+        };
+
+        self.ppu.tick(&bus)
+    }
+
     pub(crate) fn nmi_asserted(&self) -> bool {
         self.ppu.nmi_asserted()
     }

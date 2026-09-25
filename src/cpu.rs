@@ -80,7 +80,7 @@ impl Cpu {
     }
 
     fn clock_ppu_dot(&mut self, bus: &mut CpuBus) {
-        bus.frame_pending |= bus.ppu.tick();
+        bus.frame_pending |= bus.tick_ppu();
     }
 
     fn begin_cycle(&mut self, bus: &mut CpuBus) {

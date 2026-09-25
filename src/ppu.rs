@@ -44,7 +44,7 @@ impl Default for Ppu {
 }
 
 impl Ppu {
-    pub(crate) fn tick(&mut self) -> bool {
+    pub(crate) fn tick(&mut self, bus: &PpuBus<'_>) -> bool {
         let rendering_enabled =
             self.registers.mask.show_background() || self.registers.mask.show_sprite();
 
@@ -92,6 +92,8 @@ impl Ppu {
             }
             _ => {}
         }
+
+        self.check_sprite_zero_hit(bus);
 
         return frame_ready;
     }
@@ -227,6 +229,31 @@ impl Ppu {
         self.registers.control.generate_nmi() && self.registers.status.vblank_started()
     }
 
+    fn check_sprite_zero_hit(&mut self, bus: &PpuBus<'_>) {
+        if self.registers.status.sprite_zero_hit()
+            || self.scanline >= 240
+            || !(1..=255).contains(&self.dot)
+        {
+            return;
+        }
+
+        let mask = &self.registers.mask;
+        if !mask.show_background() || !mask.show_sprite() {
+            return;
+        }
+
+        let x = self.dot - 1;
+        let y = self.scanline;
+
+        if x < 8 && (!mask.leftmost_8px_background() || !mask.leftmost_8px_sprite()) {
+            return;
+        }
+
+        if self.sprite_zero_opaque_at(bus, x, y) && self.background_opaque_at(bus, x, y) {
+            self.registers.status.set_sprite_zero_hit(true);
+        }
+    }
+
     fn background_palette(&self, attribute_table: &[u8], tile_x: usize, tile_y: usize) -> [u8; 4] {
         let attribute_table_index = tile_y / 4 * 8 + tile_x / 4;
         let attibute_table_value = attribute_table[attribute_table_index];
@@ -248,6 +275,45 @@ impl Ppu {
         ]
     }
 
+    fn background_opaque_at(&self, bus: &PpuBus<'_>, x: usize, y: usize) -> bool {
+        let scroll = &self.registers.scroll;
+        let mut nametable = scroll.name_table_address();
+
+        let scrolled_x = x + usize::from(scroll.scroll_x());
+        if scrolled_x >= 256 {
+            nametable ^= 0x0400;
+        }
+        let tile_x = (scrolled_x / 8) & 31;
+
+        let scroll_y = usize::from(scroll.scroll_y());
+        let pixel_y = (scroll_y & 7) + y;
+        let mut tile_y = scroll_y / 8;
+
+        for _ in 0..pixel_y / 8 {
+            match tile_y {
+                29 => {
+                    tile_y = 0;
+                    nametable ^= 0x0800;
+                }
+                31 => tile_y = 0,
+                _ => tile_y += 1,
+            }
+        }
+
+        let tile_address = nametable + (tile_y * 32 + tile_x) as u16;
+        let tile = u16::from(bus.read(tile_address));
+
+        let address = self.registers.control.background_pattern_address_value()
+            + tile * 16
+            + (pixel_y & 7) as u16;
+
+        let low = bus.read(address);
+        let high = bus.read(address + 8);
+        let bit = 7 - (scrolled_x & 7);
+
+        ((low | high) & (1u8 << bit)) != 0
+    }
+
     fn sprite_palette(&self, index: usize) -> [u8; 4] {
         let palette_index = self.oam_data[index + 2] & 0b11;
         let palette_start = 0x11 + (palette_index * 4) as usize;
@@ -258,6 +324,46 @@ impl Ppu {
             self.palette_table[palette_start + 1],
             self.palette_table[palette_start + 2],
         ]
+    }
+
+    fn sprite_zero_opaque_at(&self, bus: &PpuBus<'_>, x: usize, y: usize) -> bool {
+        let top = usize::from(self.oam_data[0]) + 1;
+        let tile = u16::from(self.oam_data[1]);
+        let attributes = self.oam_data[2];
+        let left = usize::from(self.oam_data[3]);
+        let height = if self.registers.control.sprite_size() {
+            16
+        } else {
+            8
+        };
+
+        if x < left || x >= left + 8 || y < top || y >= top + height {
+            return false;
+        }
+
+        let mut column = x - left;
+        let mut row = y - top;
+
+        if attributes & 0x40 != 0 {
+            column = 7 - column;
+        }
+        if attributes & 0x80 != 0 {
+            row = height - 1 - row;
+        }
+
+        let address = if height == 16 {
+            let bank = (tile & 1) * 0x1000;
+            let tile = (tile & !1) + (row / 8) as u16;
+            bank + tile * 16 + (row % 8) as u16
+        } else {
+            self.registers.control.sprite_pattern_address_value() + tile * 16 + row as u16
+        };
+
+        let low = bus.read(address);
+        let high = bus.read(address + 8);
+        let bit = 7 - column;
+
+        ((low | high) & (1u8 << bit)) != 0
     }
 }
 

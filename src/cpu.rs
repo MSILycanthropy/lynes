@@ -73,14 +73,25 @@ pub struct Cpu {
 }
 
 impl Cpu {
+    #[cfg(test)]
     pub(crate) fn clock_cycle(&mut self, bus: &mut CpuBus) {
-        bus.total_cpu_cycles += 1;
+        self.begin_cycle(bus);
+        self.end_cycle(bus);
+    }
 
-        for _ in 0..3 {
-            bus.frame_pending |= bus.ppu.tick();
-            // Preserve the current per-dot sampling until cycle phases are modeled.
-            self.sample_nmi_input(bus.nmi_asserted());
-        }
+    fn clock_ppu_dot(&mut self, bus: &mut CpuBus) {
+        bus.frame_pending |= bus.ppu.tick();
+    }
+
+    fn begin_cycle(&mut self, bus: &mut CpuBus) {
+        bus.total_cpu_cycles += 1;
+        self.clock_ppu_dot(bus);
+        self.clock_ppu_dot(bus);
+    }
+
+    fn end_cycle(&mut self, bus: &mut CpuBus) {
+        self.clock_ppu_dot(bus);
+        self.sample_nmi_input(bus.nmi_asserted());
     }
 
     pub(crate) fn reset(&mut self, bus: &mut CpuBus) {
@@ -117,23 +128,17 @@ impl Cpu {
             self.run_oam_dma(bus, page, address);
         }
 
-        self.clock_cycle(bus);
+        self.begin_cycle(bus);
         let value = bus.read(address);
-
-        if (0x2000..=0x3FFF).contains(&address) && address & 0b111 == 2 {
-            self.sample_nmi_input(bus.nmi_asserted());
-        }
+        self.end_cycle(bus);
 
         value
     }
 
     pub(crate) fn write(&mut self, bus: &mut CpuBus, address: u16, value: u8) {
-        self.clock_cycle(bus);
+        self.begin_cycle(bus);
         let effect = bus.write(address, value);
-
-        if (0x2000..=0x3FFF).contains(&address) && address & 0b111 == 0 {
-            self.sample_nmi_input(bus.nmi_asserted());
-        }
+        self.end_cycle(bus);
 
         if let WriteEffect::OamDma { page } = effect {
             bus.oam_dma_request = Some(page);

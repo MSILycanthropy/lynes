@@ -19,6 +19,17 @@ cargo test --test blargg instr_test_v5 -- --include-ignored --nocapture
 cargo test --test blargg ppu_vbl_nmi_06_suppression -- --ignored --exact --nocapture
 ```
 
+With CNROM and cartridge RAM sizing implemented, `ppu_read_buffer` now executes
+but reports `Failed(63)` with failing subtests 69, 67, 65 and 63 (sprite-zero-hit
+checks). It remains ignored.
+
+Basic MMC1 support enables the four combined `instr_test_v3`/`instr_test_v5`
+ROMs (`all_instrs` and `official_only`). The combined `ppu_vbl_nmi` ROM now runs
+but fails `02-vbl_set_time` at VBlank suppression. Combined APU, instruction-misc
+and instruction-timing ROMs reach their existing APU-related failures. The
+combined CPU-interrupt ROM still cannot load its non-power-of-two 80 KiB PRG
+layout. Ignore reasons record these results; the audit found no other passes.
+
 The original names `cpu_basics` (v5's `01-basics`) and `ppu_vbl_basics` are preserved. Both run by default. The `instr_test_v5` filter therefore excludes `cpu_basics`.
 
 Run an external ROM using the supported result protocol:
@@ -33,7 +44,9 @@ Add or edit Rust test declarations directly in `tests/support/blargg_cases.rs`. 
 
 The runner starts at the reset vector through `NES::step()`. It requires the `DE B0 61` signature at `$6001–$6003`, reads status from `$6000`, and bounds diagnostic text reads from `$6004` at the end of PRG RAM. Reset requests wait at least 100 ms of emulated NTSC time and do not renew the cycle budget.
 
-Currently supported cartridges use mapper 0, 16/32 KiB PRG ROM, 8 KiB CHR ROM, and horizontal/vertical mirroring. Other layouts are rejected. Most tests get 30 million CPU cycles; longer instruction/OAM suites get 120 million. The external-ROM helper uses 30 million.
+Mapper/layout support is determined by the cartridge loader; the runner does not impose NROM PRG/CHR size limits. Four-screen mirroring remains rejected before execution. Missing mapper support, emulator panics and timeouts are failures, never passes. Most tests get 30 million CPU cycles; longer instruction/OAM suites get 120 million. The external-ROM helper uses 30 million.
+
+The mapper 0–5 suite (`cargo test --test mappers`) reuses the `mmc3_test` and `mmc3_test_2` fixtures and this status-protocol runner. See [the mapper fixture catalog](../mappers/README.md) for additional banking, RAM and submapper ROMs.
 
 Legacy screen/beep tests need verified result adapters; audio/visual tests need human or dedicated output validation. Their `deferred_test!` declarations are ignored placeholders: explicitly running one reports the prerequisite without executing the ROM. Completion is not treated as a pass for those fixtures.
 

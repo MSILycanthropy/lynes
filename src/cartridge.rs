@@ -1,22 +1,26 @@
 use std::path::Path;
 
-use crate::mapper::Mapper;
+use crate::mapper::{ChrMapping, Mapper, MapperKind, PrgMapping};
 
 const NES_TAG: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
 const PRG_ROM_PAGE_SIZE: usize = 16384;
 const CHR_ROM_PAGE_SIZE: usize = 8192;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum ScreenMirroring {
     Vertical,
     Horizontal,
+    SingleScreenLower,
+    SingleScreenUpper,
     FourScreen,
 }
 
 pub struct Cartridge {
     pub prg_rom: Vec<u8>,
     pub prg_ram: Vec<u8>,
+    pub prg_nvram: Vec<u8>,
     pub chr_rom: Vec<u8>,
+    pub chr_ram: Vec<u8>,
     pub mapper: Mapper,
     pub submapper: u8,
     pub screen_mirroring: ScreenMirroring,
@@ -26,8 +30,10 @@ impl Default for Cartridge {
     fn default() -> Self {
         Self {
             prg_rom: vec![],
-            prg_ram: vec![0; 8192],
+            prg_ram: vec![],
+            prg_nvram: vec![],
             chr_rom: vec![],
+            chr_ram: vec![],
             mapper: Mapper::default(),
             submapper: 0,
             screen_mirroring: ScreenMirroring::Horizontal,
@@ -36,22 +42,48 @@ impl Default for Cartridge {
 }
 
 impl Cartridge {
-    pub fn cpu_read(&self, address: u16) -> Option<u8> {
-        match address {
-            0x6000..=0x7FFF => Some(self.prg_ram[(address - 0x6000) as usize]),
-            0x8000..=0xFFFF => {
-                let offset = self.mapper.map_prg_rom(address);
-                Some(self.prg_rom[offset])
-            }
-            _ => None,
-        }
+    pub fn mirroring(&self) -> ScreenMirroring {
+        self.mapper.mirroring().unwrap_or(self.screen_mirroring)
     }
 
-    pub fn cpu_write(&mut self, address: u16, value: u8) {
+    pub fn cpu_read(&self, address: u16) -> Option<u8> {
+        let mapping = self.mapper.map_prg(address)?;
+
+        Some(match mapping {
+            PrgMapping::Rom(offset) => self.prg_rom[offset],
+            PrgMapping::Ram(offset) => self.prg_ram[offset],
+            PrgMapping::NvRam(offset) => self.prg_nvram[offset],
+        })
+    }
+
+    pub fn cpu_write(&mut self, address: u16, value: u8, cpu_cycle: usize) {
         match address {
             0x4020..=0x5FFF => {}
-            0x6000..=0x7FFF => self.prg_ram[(address - 0x6000) as usize] = value,
-            0x8000..=0xFFFF => self.mapper.write_register(address, value),
+            0x6000..=0x7FFF => match self.mapper.map_prg(address) {
+                Some(PrgMapping::Ram(offset)) => {
+                    self.prg_ram[offset] = value;
+                }
+                Some(PrgMapping::NvRam(offset)) => {
+                    self.prg_nvram[offset] = value;
+                }
+                Some(PrgMapping::Rom(_)) | None => {}
+            },
+            0x8000..=0xFFFF => {
+                let has_bus_conflicts = matches!(
+                    &self.mapper.kind,
+                    MapperKind::Cnrom { .. } | MapperKind::Uxrom { .. }
+                ) && matches!(self.submapper, 0 | 2);
+
+                let effective_value = if has_bus_conflicts {
+                    let offset = self.mapper.map_prg_rom(address);
+                    value & self.prg_rom[offset]
+                } else {
+                    value
+                };
+
+                self.mapper
+                    .write_register(address, effective_value, cpu_cycle);
+            }
             _ => panic!("Invalid cartridge CPU write address: {:#06X}", address),
         }
     }
@@ -59,16 +91,26 @@ impl Cartridge {
     pub fn ppu_read(&self, address: u16) -> u8 {
         match address {
             0..=0x1FFF => {
-                let offset = self.mapper.map_chr(address);
-                self.chr_rom[offset]
+                let mapping = self.mapper.map_chr(address);
+
+                match mapping {
+                    ChrMapping::Rom(offset) => self.chr_rom[offset],
+                    ChrMapping::Ram(offset) => self.chr_ram[offset],
+                }
             }
             _ => panic!("Invalid cartridge PPU read address: {:#06X}", address),
         }
     }
 
-    pub fn ppu_write(&mut self, address: u16, _value: u8) {
+    pub fn ppu_write(&mut self, address: u16, value: u8) {
         match address {
-            0..=0x1FFF => {}
+            0..=0x1FFF => {
+                let mapping = self.mapper.map_chr(address);
+
+                if let ChrMapping::Ram(offset) = mapping {
+                    self.chr_ram[offset] = value;
+                }
+            }
             _ => panic!("Invalid cartridge PPU write address: {:#06X}", address),
         }
     }
@@ -80,13 +122,23 @@ impl Cartridge {
 
     fn load_bytes(bytes: &[u8]) -> Self {
         let rom = RomImage::parse(bytes);
-        let mapper = Mapper::new(rom.mapper_id, rom.prg_rom.len())
-            .unwrap_or_else(|error| panic!("Unable to initialize cartridge mapper: {error}"));
+        let mapper = Mapper::new(
+            rom.mapper_id,
+            rom.prg_rom.len(),
+            rom.chr_rom.len(),
+            rom.chr_ram_size,
+            rom.prg_ram_size,
+            rom.prg_nvram_size,
+            usize::from(rom.submapper),
+        )
+        .unwrap_or_else(|error| panic!("Unable to initialize cartridge mapper: {error}"));
 
         Self {
             prg_rom: rom.prg_rom,
-            prg_ram: vec![0; 8192],
+            prg_ram: vec![0; rom.prg_ram_size],
+            prg_nvram: vec![0; rom.prg_nvram_size],
             chr_rom: rom.chr_rom,
+            chr_ram: vec![0; rom.chr_ram_size],
             mapper,
             submapper: rom.submapper,
             screen_mirroring: rom.screen_mirroring,
@@ -98,6 +150,9 @@ impl Cartridge {
 struct RomImage {
     prg_rom: Vec<u8>,
     chr_rom: Vec<u8>,
+    chr_ram_size: usize,
+    prg_ram_size: usize,
+    prg_nvram_size: usize,
     mapper_id: u16,
     submapper: u8,
     screen_mirroring: ScreenMirroring,
@@ -140,6 +195,23 @@ impl RomImage {
         let chr_rom_size =
             rom_size(bytes[5], size_msb >> 4, CHR_ROM_PAGE_SIZE).expect("CHR ROM size overflow");
 
+        let (prg_ram_size, prg_nvram_size) = if ines_ver == 2 {
+            (ram_size(bytes[10] & 0x0F), ram_size(bytes[10] >> 4))
+        } else {
+            let size = usize::from(bytes[8].max(1)) * 0x2000;
+            let battery_backed = bytes[6] & 0x02 != 0;
+
+            if battery_backed { (0, size) } else { (size, 0) }
+        };
+
+        let chr_ram_size = if ines_ver == 2 {
+            ram_size(bytes[11] & 0x0F)
+        } else if chr_rom_size == 0 {
+            0x2000
+        } else {
+            0
+        };
+
         let skip_trainer = bytes[6] & 0x04 != 0;
 
         let prg_rom_start = 16 + if skip_trainer { 512 } else { 0 };
@@ -148,6 +220,9 @@ impl RomImage {
         Self {
             prg_rom: bytes[prg_rom_start..(prg_rom_start + prg_rom_size)].to_vec(),
             chr_rom: bytes[chr_rom_start..(chr_rom_start + chr_rom_size)].to_vec(),
+            chr_ram_size,
+            prg_ram_size,
+            prg_nvram_size,
             mapper_id: mapper,
             submapper: submapper,
             screen_mirroring: screen_mirroring,
@@ -165,6 +240,14 @@ fn rom_size(lsb: u8, msb_nibble: u8, unit: usize) -> Option<usize> {
         let units = ((msb_nibble as usize) << 8) | lsb as usize;
         units.checked_mul(unit)
     }
+}
+
+fn ram_size(shift: u8) -> usize {
+    if shift == 0 {
+        return 0;
+    }
+
+    64 << shift
 }
 
 pub mod test {

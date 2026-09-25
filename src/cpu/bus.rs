@@ -139,7 +139,9 @@ impl CpuBus {
             0x4018..=0x401F => {
                 // panic!("APU and I/O functionality that is normally disabled")
             }
-            0x4020..=0xFFFF => self.cartridge.cpu_write(address, value),
+            0x4020..=0xFFFF => self
+                .cartridge
+                .cpu_write(address, value, self.total_cpu_cycles),
         }
 
         WriteEffect::None

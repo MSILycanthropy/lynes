@@ -9,32 +9,29 @@ impl NES {
     }
 
     fn render_background(&mut self) {
+        let ciram = self.bus.ciram;
+        let mirroring = self.bus.cartridge.mirroring();
+
         let scroll_x = self.bus.ppu.registers.scroll.scroll_x() as usize;
         let scroll_y = self.bus.ppu.registers.scroll.scroll_y() as usize;
 
+        use ScreenMirroring::*;
         let (first_nametable, second_nametable) = match (
-            self.bus.cartridge.screen_mirroring.clone(),
+            mirroring,
             self.bus.ppu.registers.scroll.name_table_address(),
         ) {
-            (ScreenMirroring::Vertical, 0x2000)
-            | (ScreenMirroring::Vertical, 0x2800)
-            | (ScreenMirroring::Horizontal, 0x2000)
-            | (ScreenMirroring::Horizontal, 0x2400) => (
-                &self.bus.ciram.clone()[0..0x400],
-                &self.bus.ciram.clone()[0x400..0x800],
-            ),
-            (ScreenMirroring::Vertical, 0x2400)
-            | (ScreenMirroring::Vertical, 0x2C00)
-            | (ScreenMirroring::Horizontal, 0x2800)
-            | (ScreenMirroring::Horizontal, 0x2C00) => (
-                &self.bus.ciram.clone()[0x400..0x800],
-                &self.bus.ciram.clone()[0..0x400],
-            ),
+            (Vertical, 0x2000)
+            | (Vertical, 0x2800)
+            | (Horizontal, 0x2000)
+            | (Horizontal, 0x2400) => (&ciram[0..0x400], &ciram[0x400..0x800]),
+            (Vertical, 0x2400)
+            | (Vertical, 0x2C00)
+            | (Horizontal, 0x2800)
+            | (Horizontal, 0x2C00) => (&ciram[0x400..0x800], &ciram[0..0x400]),
+            (SingleScreenLower, _) => (&ciram[0..0x400], &ciram[0..0x400]),
+            (SingleScreenUpper, _) => (&ciram[0x400..0x800], &ciram[0x400..0x800]),
             (_, _) => {
-                panic!(
-                    "Not supported mirroring type {:?}",
-                    self.bus.cartridge.screen_mirroring
-                );
+                panic!("Not supported mirroring type {mirroring:?}",);
             }
         };
 

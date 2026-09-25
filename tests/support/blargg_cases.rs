@@ -58,7 +58,7 @@ blargg_test!(
     apu_test_apu_test,
     "apu_test/apu_test.nes",
     30000000,
-    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 1\")"
+    "baseline: Failed(1); 1-len_ctr failed #2: length counter load or $4015"
 );
 blargg_test!(
     apu_test_1_len_ctr,
@@ -242,7 +242,7 @@ blargg_test!(
     cpu_interrupts_v2_cpu_interrupts,
     "cpu_interrupts_v2/cpu_interrupts.nes",
     30000000,
-    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 1\")"
+    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported PRG ROM size: 81920 bytes\")"
 );
 blargg_test!(
     cpu_interrupts_v2_1_cli_latency,
@@ -352,7 +352,7 @@ blargg_test!(
     instr_misc_instr_misc,
     "instr_misc/instr_misc.nes",
     30000000,
-    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 1\")"
+    "baseline: Failed(1); 04-dummy_reads_apu failed #2: Official opcodes failed"
 );
 blargg_test!(
     instr_misc_01_abs_x_wrap,
@@ -378,14 +378,12 @@ blargg_test!(
 blargg_test!(
     instr_test_v3_all_instrs,
     "instr_test_v3/all_instrs.nes",
-    120000000,
-    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 1\")"
+    120000000
 );
 blargg_test!(
     instr_test_v3_official_only,
     "instr_test_v3/official_only.nes",
-    120000000,
-    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 1\")"
+    120000000
 );
 blargg_test!(
     instr_test_v3_01_implied,
@@ -457,14 +455,12 @@ blargg_test!(
 blargg_test!(
     instr_test_v5_all_instrs,
     "instr_test_v5/all_instrs.nes",
-    120000000,
-    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 1\")"
+    120000000
 );
 blargg_test!(
     instr_test_v5_official_only,
     "instr_test_v5/official_only.nes",
-    120000000,
-    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 1\")"
+    120000000
 );
 blargg_test!(cpu_basics, "instr_test_v5/01-basics.nes", 120000000);
 blargg_test!(
@@ -538,7 +534,7 @@ blargg_test!(
     instr_timing_instr_timing,
     "instr_timing/instr_timing.nes",
     30000000,
-    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 1\")"
+    "baseline: Failed(1); 1-instr_timing failed #5: APU length-period or instruction timing"
 );
 blargg_test!(
     instr_timing_1_instr_timing,
@@ -786,13 +782,13 @@ blargg_test!(
     ppu_read_buffer_test_ppu_read_buffer,
     "ppu_read_buffer/test_ppu_read_buffer.nes",
     120000000,
-    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 3\")"
+    "baseline: Failed(63); sprite 0 hit checks fail (reported tests: 69 67 65 63)"
 );
 blargg_test!(
     ppu_vbl_nmi_ppu_vbl_nmi,
     "ppu_vbl_nmi/ppu_vbl_nmi.nes",
     30000000,
-    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 1\")"
+    "baseline: Failed(1); 02-vbl_set_time: 04 - V; expected 04 - - (VBL flag suppression)"
 );
 blargg_test!(ppu_vbl_basics, "ppu_vbl_nmi/01-vbl_basics.nes", 30000000);
 blargg_test!(

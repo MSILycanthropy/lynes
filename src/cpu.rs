@@ -1150,6 +1150,7 @@ mod tests {
     fn step_reports_dma_cycles_and_preserves_a_frame_completed_during_transfer() {
         let mut nes = NES::default();
         nes.bus.cartridge.chr_rom = vec![0; 8192]; // Frame completion invokes the renderer.
+        nes.bus.cartridge.mapper = crate::mapper::Mapper::new(0, 0x4000, 8192, 0, 0, 0, 0).unwrap();
         nes.bus.write(0, 0xA9); // LDA #$56: two real reads.
         nes.bus.write(1, 0x56);
         nes.cpu_write(0x4014, 0x02);
@@ -1209,6 +1210,8 @@ mod tests {
     fn reset_preserves_registers_and_ram_and_keeps_the_ppu_clock_running() {
         let mut nes = NES::default();
         nes.bus.cartridge.prg_rom = vec![0; 0x4000];
+        nes.bus.cartridge.prg_ram = vec![0; 8192];
+        nes.bus.cartridge.mapper = crate::mapper::Mapper::new(0, 0x4000, 0, 0, 8192, 0, 0).unwrap();
         nes.bus.cartridge.prg_rom[0x3FFC..0x3FFE].copy_from_slice(&[0x23, 0x81]);
         nes.bus.ram.fill(0xA5);
         nes.bus.write(0x6000, 0x5A);

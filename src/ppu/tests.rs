@@ -8,8 +8,10 @@ fn cartridge(mirroring: ScreenMirroring) -> Cartridge {
     Cartridge {
         prg_rom: vec![0; 32_768],
         prg_ram: vec![0; 8192],
+        prg_nvram: vec![],
         chr_rom: vec![0; 8_192],
-        mapper: Mapper::new(0, 32_768).unwrap(),
+        chr_ram: vec![],
+        mapper: Mapper::new(0, 32_768, 8_192, 0, 8192, 0, 0).unwrap(),
         submapper: 0,
         screen_mirroring: mirroring,
     }

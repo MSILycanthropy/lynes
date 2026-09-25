@@ -23,18 +23,19 @@ impl PpuBus<'_> {
     }
 
     fn mirror_vram_address(&self, address: u16) -> usize {
-        let mirrored_vram = address & 0b10111111111111;
-        let vram_index = mirrored_vram - 0x2000;
+        let vram_index = usize::from(address) & 0x0FFF;
         let name_table = vram_index / 0x0400;
+        let offset = vram_index & 0x3FF;
 
-        let index = match (&self.cartridge.screen_mirroring, name_table) {
-            (ScreenMirroring::Vertical, 2) | (ScreenMirroring::Vertical, 3) => vram_index - 0x800,
-            (ScreenMirroring::Horizontal, 2) => vram_index - 0x400,
-            (ScreenMirroring::Horizontal, 1) => vram_index - 0x400,
-            (ScreenMirroring::Horizontal, 3) => vram_index - 0x800,
-            _ => vram_index,
+        use ScreenMirroring::*;
+        let page = match self.cartridge.mirroring() {
+            Vertical => name_table & 1,
+            Horizontal => name_table >> 1,
+            SingleScreenLower => 0,
+            SingleScreenUpper => 1,
+            FourScreen => panic!("Four screen mirroring not supported.. yet."),
         };
 
-        usize::from(index)
+        page * 0x400 + offset
     }
 }

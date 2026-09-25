@@ -111,12 +111,11 @@ pub fn run_rom(path: &str, cycle_budget: usize) -> Report {
 }
 
 fn run_cartridge(cart: Cartridge, cycle_budget: usize) -> Report {
-    // Unsupported mapper IDs are rejected by the cartridge loader.
-    // These remaining layouts are not yet supported by the CPU/PPU.
+    // The cartridge loader owns mapper/layout support. Do not impose an NROM
+    // size restriction here: mapper ROMs legitimately use larger PRG/CHR banks
+    // and CHR RAM. Emulation failures are reported by the bounded runner below.
     let unsupported = if cart.screen_mirroring == ScreenMirroring::FourScreen {
         Some("four-screen mirroring".to_owned())
-    } else if !matches!(cart.prg_rom.len(), 16_384 | 32_768) || cart.chr_rom.len() != 8_192 {
-        Some("requires 16/32 KiB PRG ROM and 8 KiB CHR ROM; CHR RAM is not implemented".to_owned())
     } else {
         None
     };
@@ -194,8 +193,10 @@ mod tests {
         Cartridge {
             prg_rom,
             prg_ram: vec![0; 8192],
+            prg_nvram: vec![],
             chr_rom: vec![0; 8192],
-            mapper: Mapper::new(0, 32_768).unwrap(),
+            chr_ram: vec![],
+            mapper: Mapper::new(0, 32_768, 8192, 0, 8192, 0, 0).unwrap(),
             submapper: 0,
             screen_mirroring: ScreenMirroring::Horizontal,
         }
@@ -264,6 +265,19 @@ mod tests {
     }
 
     #[test]
+    fn status_protocol_accepts_banked_chr_layouts() {
+        let mut program = Vec::new();
+        initialize(&mut program);
+        write(&mut program, 0x6000, 0);
+        loop_forever(&mut program);
+        let mut cartridge = cart(&program);
+        cartridge.mapper = Mapper::new(3, 32_768, 32_768, 0, 8192, 0, 0).unwrap();
+        cartridge.chr_rom.resize(32_768, 0);
+        let result = run_cartridge(cartridge, 1000);
+        assert_eq!(result.outcome, Outcome::Passed, "{result}");
+    }
+
+    #[test]
     fn running_rom_times_out_and_reserved_status_is_rejected() {
         for code in [0x80, 0x82] {
             let mut program = Vec::new();
@@ -287,13 +301,13 @@ mod tests {
         let result = run_rom(
             concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/tests/fixtures/blargg/instr_test_v5/all_instrs.nes"
+                "/tests/fixtures/blargg/mmc3_test/1-clocking.nes"
             ),
             100,
         );
         assert!(matches!(
             result.outcome,
-            Outcome::LoadError(ref message) if message.contains("Unsupported mapper ID: 1")
+            Outcome::LoadError(ref message) if message.contains("Unsupported mapper ID: 4")
         ));
         assert_eq!(result.cpu_cycles, 0);
     }
@@ -308,6 +322,7 @@ mod tests {
     #[test]
     fn diagnostic_read_stops_at_end_of_prg_ram() {
         let mut nes = NES::default();
+        nes.insert_cart(cart(&[]));
         for address in 0x6004..=0x7FFF {
             nes.bus.write(address, b'x');
         }

@@ -95,13 +95,12 @@ impl NES {
         self.cpu.reset(&mut self.bus)
     }
 
-    pub fn insert_cart(&mut self, mut cart: Cartridge) {
+    pub fn insert_cart(&mut self, cart: Cartridge) {
         assert!(
             cart.screen_mirroring != ScreenMirroring::FourScreen,
             "No four screen mirroring yet cuz it hard."
         );
 
-        std::mem::swap(&mut cart.prg_ram, &mut self.bus.cartridge.prg_ram);
         self.bus.cartridge = cart;
     }
 

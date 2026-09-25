@@ -1,5 +1,7 @@
 #[path = "support/blargg.rs"]
 mod blargg_runner;
+#[path = "support/legacy.rs"]
+mod legacy_runner;
 
 use blargg_runner::{DEFAULT_CYCLE_BUDGET, Outcome, run_rom};
 
@@ -18,6 +20,17 @@ macro_rules! blargg_test {
         $(#[ignore = $reason])?
         fn $name() {
             assert_rom_passes($path, $budget);
+        }
+    };
+}
+
+macro_rules! legacy_test {
+    ($name:ident, $path:literal, $budget:literal $(, $reason:literal)?) => {
+        #[test]
+        $(#[ignore = $reason])?
+        fn $name() {
+            let report = legacy_runner::run($path, $budget);
+            assert_eq!(report.outcome, Outcome::Passed, "{}\n{}", $path, report);
         }
     };
 }

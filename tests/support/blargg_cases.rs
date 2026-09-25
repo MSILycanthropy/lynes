@@ -108,115 +108,127 @@ blargg_test!(
     30000000,
     "baseline: Failed(2); Rate 0's period is too short"
 );
-deferred_test!(
+legacy_test!(
     blargg_apu_2005_07_30_01_len_ctr,
     "blargg_apu_2005.07.30/01.len_ctr.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: Failed(2); requires APU counters/frame IRQ"
 );
-deferred_test!(
+legacy_test!(
     blargg_apu_2005_07_30_02_len_table,
     "blargg_apu_2005.07.30/02.len_table.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: Failed(2); requires APU counters/frame IRQ"
 );
-deferred_test!(
+legacy_test!(
     blargg_apu_2005_07_30_03_irq_flag,
     "blargg_apu_2005.07.30/03.irq_flag.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: Failed(4); requires APU counters/frame IRQ"
 );
-deferred_test!(
+legacy_test!(
     blargg_apu_2005_07_30_04_clock_jitter,
     "blargg_apu_2005.07.30/04.clock_jitter.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: Failed(3); requires APU counters/frame IRQ"
 );
-deferred_test!(
+legacy_test!(
     blargg_apu_2005_07_30_05_len_timing_mode0,
     "blargg_apu_2005.07.30/05.len_timing_mode0.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: Failed(2); requires APU counters/frame IRQ"
 );
-deferred_test!(
+legacy_test!(
     blargg_apu_2005_07_30_06_len_timing_mode1,
     "blargg_apu_2005.07.30/06.len_timing_mode1.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: Failed(2); requires APU counters/frame IRQ"
 );
-deferred_test!(
+legacy_test!(
     blargg_apu_2005_07_30_07_irq_flag_timing,
     "blargg_apu_2005.07.30/07.irq_flag_timing.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: Failed(3); requires APU counters/frame IRQ"
 );
-deferred_test!(
+legacy_test!(
     blargg_apu_2005_07_30_08_irq_timing,
     "blargg_apu_2005.07.30/08.irq_timing.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: Failed(4); requires APU counters/frame IRQ"
 );
-deferred_test!(
+legacy_test!(
     blargg_apu_2005_07_30_09_reset_timing,
     "blargg_apu_2005.07.30/09.reset_timing.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: Failed(4); requires APU counters/frame IRQ"
 );
-deferred_test!(
+legacy_test!(
     blargg_apu_2005_07_30_10_len_halt_timing,
     "blargg_apu_2005.07.30/10.len_halt_timing.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: Failed(2); requires APU counters/frame IRQ"
 );
-deferred_test!(
+legacy_test!(
     blargg_apu_2005_07_30_11_len_reload_timing,
     "blargg_apu_2005.07.30/11.len_reload_timing.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: Failed(2); requires APU counters/frame IRQ"
 );
-deferred_test!(
+legacy_test!(
     blargg_nes_cpu_test5_cpu,
     "blargg_nes_cpu_test5/cpu.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    120000000
 );
-deferred_test!(
+legacy_test!(
     blargg_nes_cpu_test5_official,
     "blargg_nes_cpu_test5/official.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    120000000
 );
-deferred_test!(
+legacy_test!(
     blargg_ppu_tests_2005_09_15b_palette_ram,
     "blargg_ppu_tests_2005.09.15b/palette_ram.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000
 );
-deferred_test!(
+legacy_test!(
     blargg_ppu_tests_2005_09_15b_power_up_palette,
     "blargg_ppu_tests_2005.09.15b/power_up_palette.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: Failed(2); power-up palette differs from the author's console-specific table"
 );
-deferred_test!(
+legacy_test!(
     blargg_ppu_tests_2005_09_15b_sprite_ram,
     "blargg_ppu_tests_2005.09.15b/sprite_ram.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000
 );
-deferred_test!(
+legacy_test!(
     blargg_ppu_tests_2005_09_15b_vbl_clear_time,
     "blargg_ppu_tests_2005.09.15b/vbl_clear_time.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000
 );
-deferred_test!(
+legacy_test!(
     blargg_ppu_tests_2005_09_15b_vram_access,
     "blargg_ppu_tests_2005.09.15b/vram_access.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000
 );
-deferred_test!(
+legacy_test!(
     branch_timing_tests_1_branch_basics,
     "branch_timing_tests/1.Branch_Basics.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000
 );
-deferred_test!(
+legacy_test!(
     branch_timing_tests_2_backward_branch,
     "branch_timing_tests/2.Backward_Branch.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000
 );
-deferred_test!(
+legacy_test!(
     branch_timing_tests_3_forward_branch,
     "branch_timing_tests/3.Forward_Branch.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000
 );
-deferred_test!(
+legacy_test!(
     cpu_dummy_reads_cpu_dummy_reads,
     "cpu_dummy_reads/cpu_dummy_reads.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000
 );
 blargg_test!(
     cpu_dummy_writes_cpu_dummy_writes_oam,
@@ -278,60 +290,63 @@ blargg_test!(
     "cpu_reset/ram_after_reset.nes",
     30000000
 );
-blargg_test!(
-    cpu_reset_registers,
-    "cpu_reset/registers.nes",
-    30000000
-);
-deferred_test!(
+blargg_test!(cpu_reset_registers, "cpu_reset/registers.nes", 30000000);
+legacy_test!(
     cpu_timing_test6_cpu_timing_test,
     "cpu_timing_test6/cpu_timing_test.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    120000000
 );
-deferred_test!(
+legacy_test!(
     dmc_dma_during_read4_dma_2007_read,
     "dmc_dma_during_read4/dma_2007_read.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: Failed(1); requires DMC DMA bus effects"
 );
-deferred_test!(
+legacy_test!(
     dmc_dma_during_read4_dma_2007_write,
     "dmc_dma_during_read4/dma_2007_write.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000
 );
-deferred_test!(
+legacy_test!(
     dmc_dma_during_read4_dma_4016_read,
     "dmc_dma_during_read4/dma_4016_read.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: Failed(1); requires DMC DMA bus effects"
 );
-deferred_test!(
+legacy_test!(
     dmc_dma_during_read4_double_2007_read,
     "dmc_dma_during_read4/double_2007_read.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: Failed(1); consecutive $2007 reads: output CRC D84F6815 is not an accepted variant"
 );
-deferred_test!(
+legacy_test!(
     dmc_dma_during_read4_read_write_2007,
     "dmc_dma_during_read4/read_write_2007.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000
 );
-deferred_test!(
+legacy_test!(
     dmc_tests_buffer_retained,
     "dmc_tests/buffer_retained.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: NeedsValidation(\"DMC audio diagnostic; no machine-readable pass/fail assertion\")"
 );
-deferred_test!(
+legacy_test!(
     dmc_tests_latency,
     "dmc_tests/latency.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: NeedsValidation(\"DMC audio diagnostic; no machine-readable pass/fail assertion\")"
 );
-deferred_test!(
+legacy_test!(
     dmc_tests_status,
     "dmc_tests/status.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: NeedsValidation(\"DMC audio diagnostic; no machine-readable pass/fail assertion\")"
 );
-deferred_test!(
+legacy_test!(
     dmc_tests_status_irq,
     "dmc_tests/status_irq.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: NeedsValidation(\"DMC audio diagnostic; no machine-readable pass/fail assertion\")"
 );
 deferred_test!(
     full_palette_flowing_palette,
@@ -442,11 +457,7 @@ blargg_test!(
 );
 blargg_test!(instr_test_v3_12_rts, "instr_test_v3/12-rts.nes", 120000000);
 blargg_test!(instr_test_v3_13_rti, "instr_test_v3/13-rti.nes", 120000000);
-blargg_test!(
-    instr_test_v3_14_brk,
-    "instr_test_v3/14-brk.nes",
-    120000000
-);
+blargg_test!(instr_test_v3_14_brk, "instr_test_v3/14-brk.nes", 120000000);
 blargg_test!(
     instr_test_v3_15_special,
     "instr_test_v3/15-special.nes",
@@ -520,11 +531,7 @@ blargg_test!(
 );
 blargg_test!(instr_test_v5_13_rts, "instr_test_v5/13-rts.nes", 120000000);
 blargg_test!(instr_test_v5_14_rti, "instr_test_v5/14-rti.nes", 120000000);
-blargg_test!(
-    instr_test_v5_15_brk,
-    "instr_test_v5/15-brk.nes",
-    120000000
-);
+blargg_test!(instr_test_v5_15_brk, "instr_test_v5/15-brk.nes", 120000000);
 blargg_test!(
     instr_test_v5_16_special,
     "instr_test_v5/16-special.nes",
@@ -548,35 +555,41 @@ blargg_test!(
     30000000,
     "baseline: Failed(1); 10 0 0 0 0 0 0 0 0"
 );
-deferred_test!(
+legacy_test!(
     mmc3_irq_tests_1_clocking,
     "mmc3_irq_tests/1.Clocking.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 4\")"
 );
-deferred_test!(
+legacy_test!(
     mmc3_irq_tests_2_details,
     "mmc3_irq_tests/2.Details.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 4\")"
 );
-deferred_test!(
+legacy_test!(
     mmc3_irq_tests_3_a12_clocking,
     "mmc3_irq_tests/3.A12_clocking.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 4\")"
 );
-deferred_test!(
+legacy_test!(
     mmc3_irq_tests_4_scanline_timing,
     "mmc3_irq_tests/4.Scanline_timing.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 4\")"
 );
-deferred_test!(
+legacy_test!(
     mmc3_irq_tests_5_mmc3_rev_a,
     "mmc3_irq_tests/5.MMC3_rev_A.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 4\")"
 );
-deferred_test!(
+legacy_test!(
     mmc3_irq_tests_6_mmc3_rev_b,
     "mmc3_irq_tests/6.MMC3_rev_B.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: LoadError(\"Unable to initialize cartridge mapper: Unsupported mapper ID: 4\")"
 );
 blargg_test!(
     mmc3_test_1_clocking,
@@ -722,55 +735,65 @@ blargg_test!(
     120000000,
     "baseline: Failed(1); ------*---*---*-"
 );
-deferred_test!(
+legacy_test!(
     pal_apu_tests_01_len_ctr,
     "pal_apu_tests/01.len_ctr.nes",
-    "PAL timing and APU unavailable; legacy result protocol also needs an adapter"
+    30000000,
+    "baseline: UnsupportedRegion(\"PAL CPU/APU timing is not implemented\")"
 );
-deferred_test!(
+legacy_test!(
     pal_apu_tests_02_len_table,
     "pal_apu_tests/02.len_table.nes",
-    "PAL timing and APU unavailable; legacy result protocol also needs an adapter"
+    30000000,
+    "baseline: UnsupportedRegion(\"PAL CPU/APU timing is not implemented\")"
 );
-deferred_test!(
+legacy_test!(
     pal_apu_tests_03_irq_flag,
     "pal_apu_tests/03.irq_flag.nes",
-    "PAL timing and APU unavailable; legacy result protocol also needs an adapter"
+    30000000,
+    "baseline: UnsupportedRegion(\"PAL CPU/APU timing is not implemented\")"
 );
-deferred_test!(
+legacy_test!(
     pal_apu_tests_04_clock_jitter,
     "pal_apu_tests/04.clock_jitter.nes",
-    "PAL timing and APU unavailable; legacy result protocol also needs an adapter"
+    30000000,
+    "baseline: UnsupportedRegion(\"PAL CPU/APU timing is not implemented\")"
 );
-deferred_test!(
+legacy_test!(
     pal_apu_tests_05_len_timing_mode0,
     "pal_apu_tests/05.len_timing_mode0.nes",
-    "PAL timing and APU unavailable; legacy result protocol also needs an adapter"
+    30000000,
+    "baseline: UnsupportedRegion(\"PAL CPU/APU timing is not implemented\")"
 );
-deferred_test!(
+legacy_test!(
     pal_apu_tests_06_len_timing_mode1,
     "pal_apu_tests/06.len_timing_mode1.nes",
-    "PAL timing and APU unavailable; legacy result protocol also needs an adapter"
+    30000000,
+    "baseline: UnsupportedRegion(\"PAL CPU/APU timing is not implemented\")"
 );
-deferred_test!(
+legacy_test!(
     pal_apu_tests_07_irq_flag_timing,
     "pal_apu_tests/07.irq_flag_timing.nes",
-    "PAL timing and APU unavailable; legacy result protocol also needs an adapter"
+    30000000,
+    "baseline: UnsupportedRegion(\"PAL CPU/APU timing is not implemented\")"
 );
-deferred_test!(
+legacy_test!(
     pal_apu_tests_08_irq_timing,
     "pal_apu_tests/08.irq_timing.nes",
-    "PAL timing and APU unavailable; legacy result protocol also needs an adapter"
+    30000000,
+    "baseline: UnsupportedRegion(\"PAL CPU/APU timing is not implemented\")"
 );
-deferred_test!(
+legacy_test!(
     pal_apu_tests_10_len_halt_timing,
     "pal_apu_tests/10.len_halt_timing.nes",
-    "PAL timing and APU unavailable; legacy result protocol also needs an adapter"
+    30000000,
+    "baseline: UnsupportedRegion(\"PAL CPU/APU timing is not implemented\")"
 );
-deferred_test!(
+legacy_test!(
     pal_apu_tests_11_len_reload_timing,
     "pal_apu_tests/11.len_reload_timing.nes",
-    "PAL timing and APU unavailable; legacy result protocol also needs an adapter"
+    30000000,
+    "baseline: UnsupportedRegion(\"PAL CPU/APU timing is not implemented\")"
 );
 blargg_test!(
     ppu_open_bus_ppu_open_bus,
@@ -781,8 +804,7 @@ blargg_test!(
 blargg_test!(
     ppu_read_buffer_test_ppu_read_buffer,
     "ppu_read_buffer/test_ppu_read_buffer.nes",
-    120000000,
-    "baseline: Failed(63); sprite 0 hit checks fail (reported tests: 69 67 65 63)"
+    120000000
 );
 blargg_test!(
     ppu_vbl_nmi_ppu_vbl_nmi,
@@ -837,148 +859,157 @@ blargg_test!(
     30000000,
     "baseline: Failed(3); Clock is skipped too late, relative to enabling BG; 08 07"
 );
-deferred_test!(
+legacy_test!(
     read_joy3_count_errors,
     "read_joy3/count_errors.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: NeedsValidation(\"DMC/controller conflict measurement; no asserted expected count\")"
 );
-deferred_test!(
+legacy_test!(
     read_joy3_count_errors_fast,
     "read_joy3/count_errors_fast.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: NeedsValidation(\"DMC/controller conflict measurement; no asserted expected count\")"
 );
-deferred_test!(
+legacy_test!(
     read_joy3_test_buttons,
     "read_joy3/test_buttons.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000
 );
-deferred_test!(
+legacy_test!(
     read_joy3_thorough_test,
     "read_joy3/thorough_test.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000
 );
-deferred_test!(
+legacy_test!(
     sprdma_and_dmc_dma_sprdma_and_dmc_dma,
     "sprdma_and_dmc_dma/sprdma_and_dmc_dma.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: TimedOut; waiting at $E29D with DMC DMA unimplemented"
 );
-deferred_test!(
+legacy_test!(
     sprdma_and_dmc_dma_sprdma_and_dmc_dma_512,
     "sprdma_and_dmc_dma/sprdma_and_dmc_dma_512.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: TimedOut; waiting at $E29D with DMC DMA unimplemented"
 );
-deferred_test!(
+legacy_test!(
     sprite_hit_tests_2005_10_05_01_basics,
     "sprite_hit_tests_2005.10.05/01.basics.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000
 );
-deferred_test!(
+legacy_test!(
     sprite_hit_tests_2005_10_05_02_alignment,
     "sprite_hit_tests_2005.10.05/02.alignment.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000
 );
-deferred_test!(
+legacy_test!(
     sprite_hit_tests_2005_10_05_03_corners,
     "sprite_hit_tests_2005.10.05/03.corners.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000
 );
-deferred_test!(
+legacy_test!(
     sprite_hit_tests_2005_10_05_04_flip,
     "sprite_hit_tests_2005.10.05/04.flip.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000
 );
-deferred_test!(
+legacy_test!(
     sprite_hit_tests_2005_10_05_05_left_clip,
     "sprite_hit_tests_2005.10.05/05.left_clip.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000
 );
-deferred_test!(
+legacy_test!(
     sprite_hit_tests_2005_10_05_06_right_edge,
     "sprite_hit_tests_2005.10.05/06.right_edge.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000
 );
-deferred_test!(
+legacy_test!(
     sprite_hit_tests_2005_10_05_07_screen_bottom,
     "sprite_hit_tests_2005.10.05/07.screen_bottom.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000
 );
-deferred_test!(
+legacy_test!(
     sprite_hit_tests_2005_10_05_08_double_height,
     "sprite_hit_tests_2005.10.05/08.double_height.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000
 );
-deferred_test!(
+legacy_test!(
     sprite_hit_tests_2005_10_05_09_timing_basics,
     "sprite_hit_tests_2005.10.05/09.timing_basics.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000
 );
-deferred_test!(
+legacy_test!(
     sprite_hit_tests_2005_10_05_10_timing_order,
     "sprite_hit_tests_2005.10.05/10.timing_order.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000
 );
-deferred_test!(
+legacy_test!(
     sprite_hit_tests_2005_10_05_11_edge_timing,
     "sprite_hit_tests_2005.10.05/11.edge_timing.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000
 );
-deferred_test!(
+legacy_test!(
     sprite_overflow_tests_1_basics,
     "sprite_overflow_tests/1.Basics.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: Failed(2); sprite evaluation/overflow is not implemented"
 );
-deferred_test!(
+legacy_test!(
     sprite_overflow_tests_2_details,
     "sprite_overflow_tests/2.Details.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: Failed(2); sprite evaluation/overflow is not implemented"
 );
-deferred_test!(
+legacy_test!(
     sprite_overflow_tests_3_timing,
     "sprite_overflow_tests/3.Timing.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: Failed(3); sprite evaluation/overflow is not implemented"
 );
-deferred_test!(
+legacy_test!(
     sprite_overflow_tests_4_obscure,
     "sprite_overflow_tests/4.Obscure.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: Failed(2); sprite evaluation/overflow is not implemented"
 );
-deferred_test!(
+legacy_test!(
     sprite_overflow_tests_5_emulator,
     "sprite_overflow_tests/5.Emulator.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000,
+    "baseline: Failed(2); sprite evaluation/overflow is not implemented"
 );
-deferred_test!(
+legacy_test!(
     vbl_nmi_timing_1_frame_basics,
     "vbl_nmi_timing/1.frame_basics.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000
 );
-deferred_test!(
+legacy_test!(
     vbl_nmi_timing_2_vbl_timing,
     "vbl_nmi_timing/2.vbl_timing.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000
 );
-deferred_test!(
+legacy_test!(
     vbl_nmi_timing_3_even_odd_frames,
     "vbl_nmi_timing/3.even_odd_frames.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000
 );
-deferred_test!(
+legacy_test!(
     vbl_nmi_timing_4_vbl_clear_timing,
     "vbl_nmi_timing/4.vbl_clear_timing.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000
 );
-deferred_test!(
+legacy_test!(
     vbl_nmi_timing_5_nmi_suppression,
     "vbl_nmi_timing/5.nmi_suppression.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000
 );
-deferred_test!(
+legacy_test!(
     vbl_nmi_timing_6_nmi_disable,
     "vbl_nmi_timing/6.nmi_disable.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000
 );
-deferred_test!(
+legacy_test!(
     vbl_nmi_timing_7_nmi_timing,
     "vbl_nmi_timing/7.nmi_timing.nes",
-    "legacy result protocol needs an adapter verified against upstream source"
+    30000000
 );

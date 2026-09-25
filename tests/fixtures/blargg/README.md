@@ -19,9 +19,8 @@ cargo test --test blargg instr_test_v5 -- --include-ignored --nocapture
 cargo test --test blargg ppu_vbl_nmi_10_even_odd_timing -- --ignored --exact --nocapture
 ```
 
-With CNROM and cartridge RAM sizing implemented, `ppu_read_buffer` now executes
-but reports `Failed(63)` with failing subtests 69, 67, 65 and 63 (sprite-zero-hit
-checks). It remains ignored.
+With CNROM, cartridge RAM sizing, and sprite-zero-hit support implemented,
+`ppu_read_buffer` passes and runs by default with a 120-million-cycle budget.
 
 Basic MMC1 support enables the four combined `instr_test_v3`/`instr_test_v5`
 ROMs (`all_instrs` and `official_only`). Individual `ppu_vbl_nmi` tests 01–09
@@ -50,6 +49,14 @@ Mapper/layout support is determined by the cartridge loader; the runner does not
 
 The mapper 0–5 suite (`cargo test --test mappers`) reuses the `mmc3_test` and `mmc3_test_2` fixtures and this status-protocol runner. See [the mapper fixture catalog](../mappers/README.md) for additional banking, RAM and submapper ROMs.
 
-Legacy screen/beep tests need verified result adapters; audio/visual tests need human or dedicated output validation. Their `deferred_test!` declarations are ignored placeholders: explicitly running one reports the prerequisite without executing the ROM. Completion is not treated as a pass for those fixtures.
+The 77 legacy screen/beep entries now have verified result adapters or explicit
+diagnostic execution paths. The recheck enables 33 newly passing ROMs, including
+all 11 sprite-hit tests. See [legacy protocol verification and results](LEGACY.md)
+for reporting addresses, source references, remaining failures, and limitations.
+The Blargg target now reports 118 passing tests: 102 ROM cases and 16 runner
+checks, with 93 entries ignored. The earlier total of 80 likewise included
+11 runner checks, so the ROM count increased from 69 to 102.
+The nine original audio/visual `deferred_test!` entries remain placeholders;
+completion alone is not treated as a pass for diagnostic fixtures.
 
 A pass establishes only that ROM's assertions. In particular, passing an APU flag-clear test does not establish working audio while APU reads are stubbed to zero. Fine NMI timing, APU functionality, additional mappers, and PAL timing remain emulator work.

@@ -24,6 +24,10 @@ pub enum Outcome {
     EmulatorPanicked(String),
     InvalidStatus(u8),
     NoProgress,
+    #[allow(dead_code)] // Legacy-only; the mapper target also includes this runner.
+    NeedsValidation(String),
+    #[allow(dead_code)]
+    UnsupportedRegion(String),
 }
 
 #[derive(Debug)]
@@ -99,8 +103,19 @@ fn report(nes: &NES, outcome: Outcome, cpu_cycles: usize, resets: usize) -> Repo
 }
 
 pub fn run_rom(path: &str, cycle_budget: usize) -> Report {
+    run_rom_observed(path, cycle_budget, |_| None)
+}
+
+// Used by pinned legacy fixtures whose result is reported through a ROM routine.
+// Observers inspect execution without changing CPU/PPU state; they may supply input.
+#[allow(dead_code)] // This runner is also included by the mapper tests.
+pub fn run_rom_observed(
+    path: &str,
+    cycle_budget: usize,
+    observer: impl FnMut(&mut NES) -> Option<(Outcome, Option<u8>, String)>,
+) -> Report {
     match catch_unwind(|| Cartridge::load(path)) {
-        Ok(cart) => run_cartridge(cart, cycle_budget),
+        Ok(cart) => run_cartridge_observed(cart, cycle_budget, observer),
         Err(error) => report(
             &NES::default(),
             Outcome::LoadError(panic_message(error)),
@@ -110,7 +125,16 @@ pub fn run_rom(path: &str, cycle_budget: usize) -> Report {
     }
 }
 
+#[cfg(test)]
 fn run_cartridge(cart: Cartridge, cycle_budget: usize) -> Report {
+    run_cartridge_observed(cart, cycle_budget, |_| None)
+}
+
+fn run_cartridge_observed(
+    cart: Cartridge,
+    cycle_budget: usize,
+    mut observer: impl FnMut(&mut NES) -> Option<(Outcome, Option<u8>, String)>,
+) -> Report {
     // The cartridge loader owns mapper/layout support. Do not impose an NROM
     // size restriction here: mapper ROMs legitimately use larger PRG/CHR banks
     // and CHR RAM. Emulation failures are reported by the bounded runner below.
@@ -132,6 +156,16 @@ fn run_cartridge(cart: Cartridge, cycle_budget: usize) -> Report {
     let mut waiting_for_reset_ack = false;
 
     loop {
+        if let Some((outcome, status, text)) = observer(&mut nes) {
+            return Report {
+                outcome,
+                cpu_cycles: cycles,
+                resets,
+                pc: nes.cpu.registers.program_counter,
+                status,
+                text,
+            };
+        }
         match status(&nes) {
             Some(0) => return report(&nes, Outcome::Passed, cycles, resets),
             Some(code @ 1..=0x7F) => {
